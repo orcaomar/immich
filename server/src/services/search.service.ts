@@ -394,11 +394,15 @@ Rules:
       }
     }
     
-    const keywords = [...negators, 'and', 'or', 'any', 'of', 'at least', 'min', 'minimum', 'photos', 'photo', 'show', 'see', 'me', 'want', 'i', 'to'];
+    const keywords = [...negators, 'but', 'and', 'or', 'any', 'of', 'at least', 'min', 'minimum', 'photos', 'photo', 'show', 'see', 'me', 'want', 'i', 'to'];
     for (const kw of keywords) {
       const regex = new RegExp(String.raw`\b${this.escapeRegExp(kw)}\b`, 'gi');
       residualText = residualText.replaceAll(regex, '');
     }
+    
+    // Remove standalone numbers and punctuation
+    residualText = residualText.replaceAll(/\b\d+\b/g, '');
+    residualText = residualText.replaceAll(/[.,/#!$%^&*;:{}=\-_`~()?]/g, ' ');
     
     residualText = residualText.replaceAll(/\s+/g, ' ').trim();
     if (residualText && residualText.length > 2) {

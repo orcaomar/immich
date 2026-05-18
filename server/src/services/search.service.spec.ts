@@ -289,4 +289,72 @@ describe(SearchService.name, () => {
       );
     });
   });
+
+  describe('translateQuery', () => {
+    const mockPeople = [
+      { id: 'uuid-alice', name: 'Alice' },
+      { id: 'uuid-bob', name: 'Bob' },
+      { id: 'uuid-charlie', name: 'Charlie' },
+    ];
+
+    beforeEach(() => {
+      mocks.person.getDistinctNames.mockResolvedValue(mockPeople);
+    });
+
+    it('should correctly parse standard inclusions and exclusions locally', async () => {
+      const auth = AuthFactory.create();
+      const result = await sut.translateQuery(auth, {
+        query: 'photos of Alice and Bob but exclude Charlie',
+      });
+
+      expect(result).toEqual({
+        personQuery: {
+          includes: [
+            {
+              personIds: ['uuid-alice', 'uuid-bob'],
+              minCount: 2,
+            },
+          ],
+          excludes: ['uuid-charlie'],
+        },
+      });
+      expect(mocks.person.getDistinctNames).toHaveBeenCalledWith(auth.user.id, { withHidden: true });
+    });
+
+    it('should correctly parse minCount using "at least" keyword', async () => {
+      const auth = AuthFactory.create();
+      const result = await sut.translateQuery(auth, {
+        query: 'at least 2 of Alice, Bob, Charlie',
+      });
+
+      expect(result).toEqual({
+        personQuery: {
+          includes: [
+            {
+              personIds: ['uuid-charlie', 'uuid-alice', 'uuid-bob'],
+              minCount: 2,
+            },
+          ],
+        },
+      });
+    });
+
+    it('should correctly parse "or" keyword as minCount: 1', async () => {
+      const auth = AuthFactory.create();
+      const result = await sut.translateQuery(auth, {
+        query: 'Alice or Bob',
+      });
+
+      expect(result).toEqual({
+        personQuery: {
+          includes: [
+            {
+              personIds: ['uuid-alice', 'uuid-bob'],
+              minCount: 1,
+            },
+          ],
+        },
+      });
+    });
+  });
 });
