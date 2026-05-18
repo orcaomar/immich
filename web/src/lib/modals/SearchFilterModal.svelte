@@ -132,7 +132,7 @@
     const query = filter.query || undefined;
 
     let payload: SmartSearchDto | MetadataSearchDto = {
-      query: filter.queryType === 'smart' ? query : undefined,
+      query: (filter.queryType === 'smart' || filter.queryType === 'ai-query') ? query : undefined,
       queryAssetId: filter.queryAssetId || undefined,
       ocr: filter.queryType === 'ocr' ? query : undefined,
       originalFileName: filter.queryType === 'metadata' ? query : undefined,
