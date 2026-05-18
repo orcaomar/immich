@@ -45,6 +45,28 @@
     return validQueryTypes.has(storedQueryType) ? storedQueryType : QueryType.SMART;
   }
 
+  const extractPersonIds = (personQuery?: SmartSearchDto['personQuery']): string[] => {
+    if (!personQuery) {
+      return [];
+    }
+    const ids = new SvelteSet<string>();
+    if (personQuery.includes) {
+      for (const group of personQuery.includes) {
+        if (group.personIds) {
+          for (const id of group.personIds) {
+            ids.add(id);
+          }
+        }
+      }
+    }
+    if (personQuery.excludes) {
+      for (const id of personQuery.excludes) {
+        ids.add(id);
+      }
+    }
+    return Array.from(ids);
+  };
+
   const asFilter = (searchQuery: SmartSearchDto | MetadataSearchDto): SearchFilter => {
     let query = '';
     if ('query' in searchQuery && searchQuery.query) {
@@ -58,12 +80,23 @@
       query = searchQuery.originalPath;
     }
 
+    const hasPersonQuery = 'personQuery' in searchQuery && !!searchQuery.personQuery;
+    if (hasPersonQuery) {
+      const originalPersonQuery = (searchQuery as SmartSearchDto).personQuery;
+      if (originalPersonQuery && 'originalQuery' in originalPersonQuery && originalPersonQuery.originalQuery) {
+        query = originalPersonQuery.originalQuery as string;
+      }
+    }
+
     return {
       query,
       ocr: searchQuery.ocr,
-      queryType: defaultQueryType(),
+      queryType: hasPersonQuery ? 'ai-query' : defaultQueryType(),
       queryAssetId: 'queryAssetId' in searchQuery ? searchQuery.queryAssetId : undefined,
-      personIds: new SvelteSet('personIds' in searchQuery ? searchQuery.personIds : []),
+      personIds: new SvelteSet([
+        ...('personIds' in searchQuery && searchQuery.personIds ? searchQuery.personIds : []),
+        ...extractPersonIds('personQuery' in searchQuery ? searchQuery.personQuery : undefined),
+      ]),
       tagIds:
         'tagIds' in searchQuery
           ? searchQuery.tagIds === null
@@ -131,6 +164,27 @@
 
     const query = filter.query || undefined;
 
+    let personQuery: SmartSearchDto['personQuery'] = undefined;
+    if (filter.personIds.size > 0) {
+      const selectedList = [...filter.personIds];
+      const originalPersonQuery = 'personQuery' in searchQuery ? searchQuery.personQuery : undefined;
+      const originalIds = extractPersonIds(originalPersonQuery);
+      const isPeopleUnchanged =
+        originalIds.length === selectedList.length &&
+        originalIds.every((id) => selectedList.includes(id));
+
+      personQuery = (isPeopleUnchanged && originalPersonQuery)
+        ? originalPersonQuery
+        : {
+            includes: [
+              {
+                personIds: selectedList,
+                minCount: selectedList.length,
+              },
+            ],
+          };
+    }
+
     let payload: SmartSearchDto | MetadataSearchDto = {
       query: (filter.queryType === 'smart' || filter.queryType === 'ai-query') ? query : undefined,
       queryAssetId: filter.queryAssetId || undefined,
@@ -149,7 +203,8 @@
       visibility: filter.display.isArchive ? AssetVisibility.Archive : undefined,
       isFavorite: filter.display.isFavorite || undefined,
       isNotInAlbum: filter.display.isNotInAlbum || undefined,
-      personIds: filter.personIds.size > 0 ? [...filter.personIds] : undefined,
+      personIds: personQuery ? undefined : (filter.personIds.size > 0 ? [...filter.personIds] : undefined),
+      personQuery,
       tagIds: filter.tagIds === null ? null : filter.tagIds.size > 0 ? [...filter.tagIds] : undefined,
       type,
       rating: filter.rating,

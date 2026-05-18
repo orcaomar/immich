@@ -295,6 +295,9 @@ describe(SearchService.name, () => {
       { id: 'uuid-alice', name: 'Alice' },
       { id: 'uuid-bob', name: 'Bob' },
       { id: 'uuid-charlie', name: 'Charlie' },
+      { id: 'uuid-omar', name: 'Omar Khan' },
+      { id: 'uuid-katyn', name: 'Katyn' },
+      { id: 'uuid-zoya', name: 'Zoya' },
     ];
 
     beforeEach(() => {
@@ -316,6 +319,7 @@ describe(SearchService.name, () => {
             },
           ],
           excludes: ['uuid-charlie'],
+          originalQuery: 'photos of Alice and Bob but exclude Charlie',
         },
       });
       expect(mocks.person.getDistinctNames).toHaveBeenCalledWith(auth.user.id, { withHidden: true });
@@ -331,10 +335,11 @@ describe(SearchService.name, () => {
         personQuery: {
           includes: [
             {
-              personIds: ['uuid-charlie', 'uuid-alice', 'uuid-bob'],
+              personIds: ['uuid-alice', 'uuid-bob', 'uuid-charlie'],
               minCount: 2,
             },
           ],
+          originalQuery: 'at least 2 of Alice, Bob, Charlie',
         },
       });
     });
@@ -353,6 +358,46 @@ describe(SearchService.name, () => {
               minCount: 1,
             },
           ],
+          originalQuery: 'Alice or Bob',
+        },
+      });
+    });
+
+    it('should expand partial names and strip components from residual text', async () => {
+      const auth = AuthFactory.create();
+      const result = await sut.translateQuery(auth, {
+        query: 'beach photos of Omar',
+      });
+
+      expect(result).toEqual({
+        query: 'beach',
+        personQuery: {
+          includes: [
+            {
+              personIds: ['uuid-omar'],
+              minCount: 1,
+            },
+          ],
+          originalQuery: 'beach photos of Omar',
+        },
+      });
+    });
+
+    it('should correctly parse complex written-number queries and strip all keywords', async () => {
+      const auth = AuthFactory.create();
+      const result = await sut.translateQuery(auth, {
+        query: 'includes at least two of Omar, Katyn or Zoya',
+      });
+
+      expect(result).toEqual({
+        personQuery: {
+          includes: [
+            {
+              personIds: ['uuid-omar', 'uuid-katyn', 'uuid-zoya'],
+              minCount: 2,
+            },
+          ],
+          originalQuery: 'includes at least two of Omar, Katyn or Zoya',
         },
       });
     });

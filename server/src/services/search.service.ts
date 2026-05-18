@@ -228,19 +228,25 @@ export class SearchService extends BaseService {
   async translateQuery(auth: AuthDto, dto: TranslateQueryDto): Promise<SmartSearchDto> {
     const people = await this.personRepository.getDistinctNames(auth.user.id, { withHidden: true });
     
+    let result: SmartSearchDto | null = null;
     const geminiKey = process.env.IMMICH_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
     if (geminiKey) {
       try {
-        const result = await this.translateWithGemini(dto.query, people, geminiKey);
-        if (result) {
-          return result;
-        }
+        result = await this.translateWithGemini(dto.query, people, geminiKey);
       } catch {
         // Fallback to local parser on Gemini API errors
       }
     }
     
-    return this.translateWithLocalParser(dto.query, people);
+    if (!result) {
+      result = this.translateWithLocalParser(dto.query, people);
+    }
+
+    if (result && result.personQuery) {
+      result.personQuery.originalQuery = dto.query;
+    }
+
+    return result;
   }
 
   private async translateWithGemini(
@@ -331,23 +337,42 @@ Rules:
     const excludePart = excludeIndex === -1 ? '' : query.slice(excludeIndex);
     
     const findPeople = (text: string) => {
-      const matched: string[] = [];
+      const matched = new Set<string>();
       const lowerText = text.toLowerCase();
-      const sortedPeople = [...people].sort((a, b) => b.name.length - a.name.length);
       
-      let tempText = lowerText;
-      for (const p of sortedPeople) {
-        if (!p.name) {
-          continue;
+      const words = lowerText.split(/\s+/)
+        .map(w => w.replaceAll(/[^\w\p{L}\p{N}]/gu, ''))
+        .filter(Boolean);
+        
+      for (const word of words) {
+        if (word.length <= 2) {
+          const exactMatch = people.some(p => p.name && p.name.toLowerCase() === word);
+          if (!exactMatch) {
+            continue;
+          }
         }
-        const lowerName = p.name.toLowerCase();
-        const regex = new RegExp(String.raw`\b${this.escapeRegExp(lowerName)}\b`, 'g');
-        if (regex.test(tempText)) {
-          matched.push(p.id);
-          tempText = tempText.replaceAll(regex, ' ');
+        
+        let bestCandidate: { id: string; name: string } | null = null;
+        for (const p of people) {
+          if (!p.name) {
+            continue;
+          }
+          const lowerName = p.name.toLowerCase();
+          const nameParts = lowerName.split(/\s+/)
+            .map(n => n.replaceAll(/[^\w\p{L}\p{N}]/gu, ''))
+            .filter(Boolean);
+            
+          if (nameParts.includes(word) && (!bestCandidate || p.name.length > bestCandidate.name.length)) {
+            bestCandidate = p;
+          }
+        }
+        
+        if (bestCandidate) {
+          matched.add(bestCandidate.id);
         }
       }
-      return matched;
+      
+      return [...matched];
     };
     
     const includes = findPeople(includePart);
@@ -363,11 +388,28 @@ Rules:
         minCount = 1;
       }
       
-      const atLeastRegex = /(?:at least|min|minimum|any|of)\s*(\d+)/i;
+      const numberWords: Record<string, number> = {
+        one: 1,
+        two: 2,
+        three: 3,
+        four: 4,
+        five: 5,
+        six: 6,
+        seven: 7,
+        eight: 8,
+        nine: 9,
+        ten: 10,
+      };
+
+      const atLeastRegex = /(?:at least|min|minimum|any|of)\s*(\d+|one|two|three|four|five|six|seven|eight|nine|ten)/i;
       const match = atLeastRegex.exec(lowerInclude);
       if (match) {
-        const parsed = Number.parseInt(match[1], 10);
-        if (!Number.isNaN(parsed) && parsed > 0 && parsed <= includes.length) {
+        const matchValue = match[1].toLowerCase();
+        let parsed = Number.parseInt(matchValue, 10);
+        if (Number.isNaN(parsed)) {
+          parsed = numberWords[matchValue] || 1;
+        }
+        if (parsed > 0 && parsed <= includes.length) {
           minCount = parsed;
         }
       }
@@ -387,14 +429,30 @@ Rules:
     }
     
     let residualText = query;
-    for (const p of people) {
+    // Strip matched people names (both full names and their individual component words)
+    const matchedPeople = people.filter(p => includes.includes(p.id) || excludes.includes(p.id));
+    for (const p of matchedPeople) {
       if (p.name) {
-        const regex = new RegExp(String.raw`\b${this.escapeRegExp(p.name)}\b`, 'gi');
-        residualText = residualText.replaceAll(regex, '');
+        const fullRegex = new RegExp(String.raw`\b${this.escapeRegExp(p.name)}\b`, 'gi');
+        residualText = residualText.replaceAll(fullRegex, '');
+        
+        const words = p.name.split(/\s+/);
+        for (const word of words) {
+          if (word.length > 2) {
+            const wordRegex = new RegExp(String.raw`\b${this.escapeRegExp(word)}\b`, 'gi');
+            residualText = residualText.replaceAll(wordRegex, '');
+          }
+        }
       }
     }
     
-    const keywords = [...negators, 'but', 'and', 'or', 'any', 'of', 'at least', 'min', 'minimum', 'photos', 'photo', 'show', 'see', 'me', 'want', 'i', 'to'];
+    const keywords = [
+      ...negators,
+      'but', 'and', 'or', 'any', 'of', 'at least', 'min', 'minimum', 
+      'photos', 'photo', 'show', 'see', 'me', 'want', 'i', 'to',
+      'includes', 'include', 'contains', 'contain', 'with',
+      'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'
+    ];
     for (const kw of keywords) {
       const regex = new RegExp(String.raw`\b${this.escapeRegExp(kw)}\b`, 'gi');
       residualText = residualText.replaceAll(regex, '');

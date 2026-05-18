@@ -148,8 +148,11 @@
             throw new Error('Translation failed');
           }
           const translated = await response.json();
-          const mergedPayload = { ...smartPayload, ...translated };
-          delete mergedPayload.query;
+          const mergedPayload = {
+            ...smartPayload,
+            ...translated,
+            query: translated.query || undefined,
+          };
           await handleSearch(mergedPayload);
         } catch {
           await handleSearch(searchResult);

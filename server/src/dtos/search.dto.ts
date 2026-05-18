@@ -15,6 +15,7 @@ const PersonQueryGroupSchema = z.object({
 const PersonQuerySchema = z.object({
   includes: z.array(PersonQueryGroupSchema).optional().describe('Inclusion filters'),
   excludes: z.array(z.uuidv4()).optional().describe('Exclusion filters'),
+  originalQuery: z.string().optional().describe('Original untranslated query string'),
 });
 
 const BaseSearchSchema = z.object({

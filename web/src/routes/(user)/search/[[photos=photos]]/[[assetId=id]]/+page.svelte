@@ -268,9 +268,24 @@
     return Object.keys(obj) as (keyof T)[];
   }
 
-  function removeFilter(key: keyof SearchTerms) {
+  function removeFilter(key: keyof SearchTerms, subKey?: 'include' | 'exclude') {
     const updatedTerms = { ...terms };
-    delete updatedTerms[key];
+    if (key === 'personQuery' && subKey && updatedTerms.personQuery) {
+      const pq = { ...updatedTerms.personQuery };
+      if (subKey === 'include') {
+        delete pq.includes;
+      } else if (subKey === 'exclude') {
+        delete pq.excludes;
+      }
+      delete (pq as Record<string, unknown>).originalQuery;
+      if (!pq.includes && !pq.excludes) {
+        delete updatedTerms.personQuery;
+      } else {
+        updatedTerms.personQuery = pq;
+      }
+    } else {
+      delete updatedTerms[key];
+    }
     void goto(Route.search(updatedTerms));
   }
 </script>
@@ -314,7 +329,7 @@
                     : 'text-rose-600 outline-rose-500 hover:bg-rose-500/15 dark:text-rose-400 dark:outline-rose-500 dark:hover:bg-rose-500/20'}"
                   aria-label={$t('remove_filter')}
                   title={$t('remove_filter')}
-                  onclick={() => removeFilter('personQuery')}
+                  onclick={() => removeFilter('personQuery', chip.type)}
                 >
                   <Icon icon={mdiClose} size="14" />
                 </button>
