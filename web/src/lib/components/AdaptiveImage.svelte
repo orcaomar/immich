@@ -149,7 +149,7 @@
     return { width: 1, height: 1 };
   });
 
-  const { insetInlineStart, top, rasterWidth, rasterHeight, rasterScale } = $derived.by(() => {
+  const { insetInlineStart, top, rasterWidth, rasterHeight, rasterScale, displayWidth, displayHeight } = $derived.by(() => {
     const scaleFn = objectFit === 'cover' ? scaleToCover : scaleToFit;
     const { width, height } = scaleFn(imageDimensions, container);
     if (maxRasterPixels === 0) {
@@ -159,6 +159,8 @@
         rasterWidth: width + 'px',
         rasterHeight: height + 'px',
         rasterScale: 1,
+        displayWidth: width,
+        displayHeight: height,
       };
     }
     const nativeRatio = imageDimensions.width / width;
@@ -170,6 +172,8 @@
       rasterWidth: width * rasterRatio + 'px',
       rasterHeight: height * rasterRatio + 'px',
       rasterScale: 1 / rasterRatio,
+      displayWidth: width,
+      displayHeight: height,
     };
   });
 
@@ -261,7 +265,6 @@
         {alt}
         width={rasterWidth}
         height={rasterHeight}
-        {overlays}
         quality="preview"
         src={status.urls.preview}
         bind:ref={previewElement}
@@ -274,11 +277,22 @@
         {alt}
         width={rasterWidth}
         height={rasterHeight}
-        {overlays}
         quality="original"
         src={status.urls.original}
         bind:ref={originalElement}
       />
     {/if}
   </div>
+
+  {#if status.started && (status.quality.thumbnail === 'success' || status.quality.preview === 'success' || status.quality.original === 'success')}
+    <div
+      class="pointer-events-none absolute"
+      style:inset-inline-start={insetInlineStart}
+      style:top={top}
+      style:width="{displayWidth}px"
+      style:height="{displayHeight}px"
+    >
+      {@render overlays?.()}
+    </div>
+  {/if}
 </div>
