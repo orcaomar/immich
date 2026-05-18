@@ -126,13 +126,42 @@
     searchStore.isSearchEnabled = false;
 
     // Refresh search type after modal closes
-    getSearchType();
+    const searchType = getSearchType();
 
     if (!searchResult) {
       return;
     }
 
-    await handleSearch(searchResult);
+    if (searchType === 'ai-query') {
+      const smartPayload = searchResult as SmartSearchDto;
+      if (smartPayload.query) {
+        isTranslating = true;
+        try {
+          const response = await fetch('/api/search/translate-query', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ query: smartPayload.query }),
+          });
+          if (!response.ok) {
+            throw new Error('Translation failed');
+          }
+          const translated = await response.json();
+          const mergedPayload = { ...smartPayload, ...translated };
+          delete mergedPayload.query;
+          await handleSearch(mergedPayload);
+        } catch {
+          await handleSearch(searchResult);
+        } finally {
+          isTranslating = false;
+        }
+      } else {
+        await handleSearch(searchResult);
+      }
+    } else {
+      await handleSearch(searchResult);
+    }
   };
 
   const onSubmit = async () => {
@@ -220,7 +249,7 @@
 
   const onsubmit = (event: Event) => {
     event.preventDefault();
-    onSubmit();
+    handlePromiseError(onSubmit());
   };
 
   function getSearchType() {

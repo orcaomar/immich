@@ -89,6 +89,7 @@ export enum QueryType {
   DESCRIPTION = 'description',
   FULL_PATH = 'fullPath',
   OCR = 'ocr',
+  AI_QUERY = 'ai-query',
 }
 
 export const validQueryTypes = new Set([
@@ -97,6 +98,7 @@ export const validQueryTypes = new Set([
   QueryType.DESCRIPTION,
   QueryType.FULL_PATH,
   QueryType.OCR,
+  QueryType.AI_QUERY,
 ]);
 
 export const locales = [

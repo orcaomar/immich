@@ -6,7 +6,7 @@
 
   interface Props {
     query: string | undefined;
-    queryType?: 'smart' | 'metadata' | 'description' | 'fullPath' | 'ocr';
+    queryType?: 'smart' | 'metadata' | 'description' | 'fullPath' | 'ocr' | 'ai-query';
   }
 
   let { query = $bindable(), queryType = $bindable('smart') }: Props = $props();
@@ -19,6 +19,13 @@
       {#if featureFlagsManager.value.smartSearch}
         <RadioButton name="query-type" id="context-radio" label={$t('context')} bind:group={queryType} value="smart" />
       {/if}
+      <RadioButton
+        name="query-type"
+        id="ai-query-radio"
+        label="AI Query (Beta)"
+        bind:group={queryType}
+        value="ai-query"
+      />
       <RadioButton
         name="query-type"
         id="file-name-radio"
@@ -49,6 +56,10 @@
   {#if queryType === 'smart'}
     <Field label={$t('search_by_context')}>
       <Input type="text" placeholder={$t('sunrise_on_the_beach')} bind:value={query} />
+    </Field>
+  {:else if queryType === 'ai-query'}
+    <Field label="Search with AI Query">
+      <Input type="text" placeholder="e.g., Alice and Bob but exclude Charlie" bind:value={query} />
     </Field>
   {:else if queryType === 'metadata'}
     <Field label={$t('search_by_filename')}>
