@@ -7,6 +7,16 @@ import { AssetOrder, AssetOrderSchema, AssetTypeSchema, AssetVisibilitySchema } 
 import { emptyStringToNull, isoDatetimeToDate, stringToBool } from 'src/validation';
 import z from 'zod';
 
+const PersonQueryGroupSchema = z.object({
+  personIds: z.array(z.uuidv4()).describe('Filter by person IDs'),
+  minCount: z.number().int().min(1).optional().describe('Minimum count of people from this group'),
+});
+
+const PersonQuerySchema = z.object({
+  includes: z.array(PersonQueryGroupSchema).optional().describe('Inclusion filters'),
+  excludes: z.array(z.uuidv4()).optional().describe('Exclusion filters'),
+});
+
 const BaseSearchSchema = z.object({
   libraryId: z.uuidv4().nullish().describe('Library ID to filter by'),
   type: AssetTypeSchema.optional(),
@@ -47,6 +57,7 @@ const BaseSearchSchema = z.object({
         .getExtensions(),
     }),
   ocr: z.string().optional().describe('Filter by OCR text content'),
+  personQuery: PersonQuerySchema.optional().describe('Complex person logic search query'),
 });
 
 const BaseSearchWithResultsSchema = BaseSearchSchema.extend({
@@ -150,6 +161,12 @@ export class SearchPlacesDto extends createZodDto(SearchPlacesSchema) {}
 export class SearchPeopleDto extends createZodDto(SearchPeopleSchema) {}
 export class PlacesResponseDto extends createZodDto(PlacesResponseSchema) {}
 export class SearchSuggestionRequestDto extends createZodDto(SearchSuggestionRequestSchema) {}
+
+const TranslateQuerySchema = z.object({
+  query: z.string().trim().describe('Natural language search query to translate'),
+});
+
+export class TranslateQueryDto extends createZodDto(TranslateQuerySchema) {}
 
 export function mapPlaces(place: Place): PlacesResponseDto {
   return {

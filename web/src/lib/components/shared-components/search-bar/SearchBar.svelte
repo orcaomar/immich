@@ -8,7 +8,7 @@
   import { handlePromiseError } from '$lib/utils';
   import { generateId } from '$lib/utils/generate-id';
   import type { MetadataSearchDto, SmartSearchDto } from '@immich/sdk';
-  import { Button, IconButton, modalManager } from '@immich/ui';
+  import { Button, IconButton, LoadingSpinner, modalManager } from '@immich/ui';
   import { mdiClose, mdiMagnify, mdiTune } from '@mdi/js';
   import { onDestroy, onMount, tick } from 'svelte';
   import { t } from 'svelte-i18n';
@@ -32,6 +32,7 @@
   let close: (() => Promise<void>) | undefined;
   let showSearchTypeDropdown = $state(false);
   let currentSearchType = $state('smart');
+  let isTranslating = $state(false);
 
   const listboxId = generateId();
   const searchTypeId = generateId();
@@ -134,9 +135,35 @@
     await handleSearch(searchResult);
   };
 
-  const onSubmit = () => {
-    handlePromiseError(handleSearch(buildSearchPayload(value)));
-    saveSearchTerm(value);
+  const onSubmit = async () => {
+    const searchType = getSearchType();
+    if (searchType === 'ai-query') {
+      isTranslating = true;
+      try {
+        const response = await fetch('/api/search/translate-query', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ query: value }),
+        });
+        if (!response.ok) {
+          throw new Error('Translation failed');
+        }
+        const translated = await response.json();
+        await handleSearch(translated);
+        saveSearchTerm(value);
+      } catch {
+        // fall back to simple smart query if translation fails
+        await handleSearch({ query: value });
+        saveSearchTerm(value);
+      } finally {
+        isTranslating = false;
+      }
+    } else {
+      handlePromiseError(handleSearch(buildSearchPayload(value)));
+      saveSearchTerm(value);
+    }
   };
 
   const onClear = () => {
@@ -200,6 +227,7 @@
     const searchType = localStorage.getItem('searchQueryType');
     switch (searchType) {
       case 'smart':
+      case 'ai-query':
       case 'metadata':
       case 'description':
       case 'fullPath':
@@ -218,6 +246,9 @@
     switch (currentSearchType) {
       case 'smart': {
         return $t('context');
+      }
+      case 'ai-query': {
+        return 'AI Query';
       }
       case 'metadata': {
         return $t('filename');
@@ -243,6 +274,7 @@
 
   const searchTypes = [
     { value: 'smart', label: () => $t('context') },
+    { value: 'ai-query', label: () => 'AI Query' },
     { value: 'metadata', label: () => $t('filename') },
     { value: 'description', label: () => $t('description') },
     { value: 'fullPath', label: () => $t('full_path_or_folder') },
@@ -371,16 +403,22 @@
       </div>
     {/if}
     <div class="absolute inset-y-0 inset-s-0 flex items-center ps-2">
-      <IconButton
-        type="submit"
-        aria-label={$t('search')}
-        icon={mdiMagnify}
-        size="medium"
-        onclick={() => {}}
-        shape="round"
-        color="secondary"
-        variant="ghost"
-      />
+      {#if isTranslating}
+        <div class="mx-3.5 flex items-center justify-center">
+          <LoadingSpinner size="small" />
+        </div>
+      {:else}
+        <IconButton
+          type="submit"
+          aria-label={$t('search')}
+          icon={mdiMagnify}
+          size="medium"
+          onclick={() => {}}
+          shape="round"
+          color="secondary"
+          variant="ghost"
+        />
+      {/if}
     </div>
   </form>
 

@@ -1641,6 +1641,18 @@ export type MetadataSearchDto = {
     page?: number;
     /** Filter by person IDs */
     personIds?: string[];
+    /** Complex person logic search query */
+    personQuery?: {
+        /** Exclusion filters */
+        excludes?: string[];
+        /** Inclusion filters */
+        includes?: {
+            /** Minimum count of people from this group */
+            minCount?: number;
+            /** Filter by person IDs */
+            personIds: string[];
+        }[];
+    };
     /** Filter by preview file path */
     previewPath?: string;
     /** Filter by rating [1-5], or null for unrated */
@@ -1754,6 +1766,18 @@ export type RandomSearchDto = {
     ocr?: string;
     /** Filter by person IDs */
     personIds?: string[];
+    /** Complex person logic search query */
+    personQuery?: {
+        /** Exclusion filters */
+        excludes?: string[];
+        /** Inclusion filters */
+        includes?: {
+            /** Minimum count of people from this group */
+            minCount?: number;
+            /** Filter by person IDs */
+            personIds: string[];
+        }[];
+    };
     /** Filter by rating [1-5], or null for unrated */
     rating?: number | null;
     /** Number of results to return */
@@ -1822,6 +1846,18 @@ export type SmartSearchDto = {
     page?: number;
     /** Filter by person IDs */
     personIds?: string[];
+    /** Complex person logic search query */
+    personQuery?: {
+        /** Exclusion filters */
+        excludes?: string[];
+        /** Inclusion filters */
+        includes?: {
+            /** Minimum count of people from this group */
+            minCount?: number;
+            /** Filter by person IDs */
+            personIds: string[];
+        }[];
+    };
     /** Natural language search query */
     query?: string;
     /** Asset ID to use as search reference */
@@ -1888,6 +1924,18 @@ export type StatisticsSearchDto = {
     ocr?: string;
     /** Filter by person IDs */
     personIds?: string[];
+    /** Complex person logic search query */
+    personQuery?: {
+        /** Exclusion filters */
+        excludes?: string[];
+        /** Inclusion filters */
+        includes?: {
+            /** Minimum count of people from this group */
+            minCount?: number;
+            /** Filter by person IDs */
+            personIds: string[];
+        }[];
+    };
     /** Filter by rating [1-5], or null for unrated */
     rating?: number | null;
     /** Filter by state/province name */
@@ -1912,6 +1960,10 @@ export type StatisticsSearchDto = {
 export type SearchStatisticsResponseDto = {
     /** Total number of matching assets */
     total: number;
+};
+export type TranslateQueryDto = {
+    /** Natural language search query to translate */
+    query: string;
 };
 export type ServerAboutResponseDto = {
     /** Build identifier */
@@ -5366,7 +5418,7 @@ export function getExploreData(opts?: Oazapfts.RequestOpts) {
 /**
  * Search large assets
  */
-export function searchLargeAssets({ albumIds, city, country, createdAfter, createdBefore, isEncoded, isFavorite, isMotion, isNotInAlbum, isOffline, lensModel, libraryId, make, minFileSize, model, ocr, personIds, rating, size, state, tagIds, takenAfter, takenBefore, trashedAfter, trashedBefore, $type, updatedAfter, updatedBefore, visibility, withDeleted, withExif }: {
+export function searchLargeAssets({ albumIds, city, country, createdAfter, createdBefore, isEncoded, isFavorite, isMotion, isNotInAlbum, isOffline, lensModel, libraryId, make, minFileSize, model, ocr, personIds, personQuery, rating, size, state, tagIds, takenAfter, takenBefore, trashedAfter, trashedBefore, $type, updatedAfter, updatedBefore, visibility, withDeleted, withExif }: {
     albumIds?: string[];
     city?: string | null;
     country?: string | null;
@@ -5384,6 +5436,17 @@ export function searchLargeAssets({ albumIds, city, country, createdAfter, creat
     model?: string | null;
     ocr?: string;
     personIds?: string[];
+    personQuery?: {
+        /** Inclusion filters */
+        includes?: {
+            /** Filter by person IDs */
+            personIds: string[];
+            /** Minimum count of people from this group */
+            minCount?: number;
+        }[];
+        /** Exclusion filters */
+        excludes?: string[];
+    };
     rating?: number | null;
     size?: number;
     state?: string | null;
@@ -5434,6 +5497,8 @@ export function searchLargeAssets({ albumIds, city, country, createdAfter, creat
         visibility,
         withDeleted,
         withExif
+    }), QS.deep({
+        personQuery
     }))}`, {
         ...opts,
         method: "POST"
@@ -5557,6 +5622,21 @@ export function getSearchSuggestions({ country, includeNull, lensModel, make, mo
     }))}`, {
         ...opts
     }));
+}
+/**
+ * Translate natural language search query to structured people query
+ */
+export function translateQuery({ translateQueryDto }: {
+    translateQueryDto: TranslateQueryDto;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 200;
+        data: SmartSearchDto;
+    }>("/search/translate-query", oazapfts.json({
+        ...opts,
+        method: "POST",
+        body: translateQueryDto
+    })));
 }
 /**
  * Get server information

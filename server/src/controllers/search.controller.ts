@@ -17,6 +17,7 @@ import {
   SearchSuggestionRequestDto,
   SmartSearchDto,
   StatisticsSearchDto,
+  TranslateQueryDto,
 } from 'src/dtos/search.dto';
 import { ApiTag, Permission } from 'src/enum';
 import { Auth, Authenticated } from 'src/middleware/auth.guard';
@@ -85,6 +86,18 @@ export class SearchController {
   })
   searchSmart(@Auth() auth: AuthDto, @Body() dto: SmartSearchDto): Promise<SearchResponseDto> {
     return this.service.searchSmart(auth, dto);
+  }
+
+  @Post('translate-query')
+  @Authenticated({ permission: Permission.AssetRead })
+  @HttpCode(HttpStatus.OK)
+  @Endpoint({
+    summary: 'Translate natural language search query to structured people query',
+    description: 'Use Gen AI (Gemini) to translate a natural language query into logical search conditions.',
+    history: new HistoryBuilder().added('v1'),
+  })
+  translateQuery(@Auth() auth: AuthDto, @Body() dto: TranslateQueryDto): Promise<SmartSearchDto> {
+    return this.service.translateQuery(auth, dto);
   }
 
   @Get('explore')

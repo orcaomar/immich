@@ -17,6 +17,7 @@ import {
   SearchSuggestionType,
   SmartSearchDto,
   StatisticsSearchDto,
+  TranslateQueryDto,
 } from 'src/dtos/search.dto';
 import { AssetOrder, AssetVisibility, Permission } from 'src/enum';
 import { BaseService } from 'src/services/base.service';
@@ -222,5 +223,192 @@ export class SearchService extends BaseService {
         nextPage,
       },
     };
+  }
+
+  async translateQuery(auth: AuthDto, dto: TranslateQueryDto): Promise<SmartSearchDto> {
+    const people = await this.personRepository.getDistinctNames(auth.user.id, { withHidden: true });
+    
+    const geminiKey = process.env.IMMICH_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+    if (geminiKey) {
+      try {
+        const result = await this.translateWithGemini(dto.query, people, geminiKey);
+        if (result) {
+          return result;
+        }
+      } catch {
+        // Fallback to local parser on Gemini API errors
+      }
+    }
+    
+    return this.translateWithLocalParser(dto.query, people);
+  }
+
+  private async translateWithGemini(
+    query: string,
+    people: Array<{ id: string; name: string }>,
+    apiKey: string,
+  ): Promise<SmartSearchDto | null> {
+    const model = 'gemini-1.5-flash';
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    
+    const prompt = `You are a search assistant that translates a natural language search query into a structured JSON query object for a photo library search engine.
+The library has the following recognized people:
+${people.map((p) => `- Name: "${p.name}", ID: "${p.id}"`).join('\n')}
+
+Translate the following user query:
+"${query}"
+
+Output format:
+Your output must be a valid JSON object matching the following TypeScript interface:
+interface SearchQuery {
+  query?: string; // Any conceptual text filter remaining (e.g. "beach", "dogs", "sunset") after extracting the people logic
+  personQuery?: {
+    includes?: Array<{
+      personIds: string[];
+      minCount?: number;
+    }>;
+    excludes?: string[];
+  };
+}
+
+Rules:
+- Identify people mentioned in the query and map them to their corresponding IDs.
+- If a person is mentioned but not in the recognized people list, do not include their ID.
+- Formulate the logical conditions (includes with minCount, and excludes) exactly as requested.
+- If the user asks for "at least X of these people", set minCount to X.
+- If they ask for "Alice AND Bob", group them in the same includes group with minCount = 2 (or set separate includes groups if required).
+- If they ask for "Alice OR Bob", group them in the same includes group with minCount = 1.
+- If they want to exclude someone, add their ID to excludes.
+- Answer ONLY with the raw JSON object, without any markdown formatting, backticks, or surrounding text.`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{
+            text: prompt,
+          }],
+        }],
+        generationConfig: {
+          responseMimeType: 'application/json',
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    const text = data?.contents?.[0]?.parts?.[0]?.text;
+    if (text) {
+      return JSON.parse(text.trim());
+    }
+    return null;
+  }
+
+  private translateWithLocalParser(
+    query: string,
+    people: Array<{ id: string; name: string }>,
+  ): SmartSearchDto {
+    const normalizedQuery = query.toLowerCase();
+    const result: SmartSearchDto = {};
+    
+    const negators = ['not', 'except', 'exclude', 'excluding', 'without', 'but not'];
+    let excludeIndex = -1;
+    for (const negator of negators) {
+      const idx = normalizedQuery.indexOf(negator);
+      if (idx !== -1 && (excludeIndex === -1 || idx < excludeIndex)) {
+        excludeIndex = idx;
+      }
+    }
+    
+    const includePart = excludeIndex === -1 ? query : query.slice(0, excludeIndex);
+    const excludePart = excludeIndex === -1 ? '' : query.slice(excludeIndex);
+    
+    const findPeople = (text: string) => {
+      const matched: string[] = [];
+      const lowerText = text.toLowerCase();
+      const sortedPeople = [...people].sort((a, b) => b.name.length - a.name.length);
+      
+      let tempText = lowerText;
+      for (const p of sortedPeople) {
+        if (!p.name) {
+          continue;
+        }
+        const lowerName = p.name.toLowerCase();
+        const regex = new RegExp(String.raw`\b${this.escapeRegExp(lowerName)}\b`, 'g');
+        if (regex.test(tempText)) {
+          matched.push(p.id);
+          tempText = tempText.replaceAll(regex, ' ');
+        }
+      }
+      return matched;
+    };
+    
+    const includes = findPeople(includePart);
+    const excludes = findPeople(excludePart);
+    
+    const personQuery: any = {};
+    
+    if (includes.length > 0) {
+      let minCount = includes.length;
+      
+      const lowerInclude = includePart.toLowerCase();
+      if (lowerInclude.includes(' or ') || lowerInclude.includes(' any of ')) {
+        minCount = 1;
+      }
+      
+      const atLeastRegex = /(?:at least|min|minimum|any|of)\s*(\d+)/i;
+      const match = atLeastRegex.exec(lowerInclude);
+      if (match) {
+        const parsed = Number.parseInt(match[1], 10);
+        if (!Number.isNaN(parsed) && parsed > 0 && parsed <= includes.length) {
+          minCount = parsed;
+        }
+      }
+      
+      personQuery.includes = [{
+        personIds: includes,
+        minCount,
+      }];
+    }
+    
+    if (excludes.length > 0) {
+      personQuery.excludes = excludes;
+    }
+    
+    if (Object.keys(personQuery).length > 0) {
+      result.personQuery = personQuery;
+    }
+    
+    let residualText = query;
+    for (const p of people) {
+      if (p.name) {
+        const regex = new RegExp(String.raw`\b${this.escapeRegExp(p.name)}\b`, 'gi');
+        residualText = residualText.replaceAll(regex, '');
+      }
+    }
+    
+    const keywords = [...negators, 'and', 'or', 'any', 'of', 'at least', 'min', 'minimum', 'photos', 'photo', 'show', 'see', 'me', 'want', 'i', 'to'];
+    for (const kw of keywords) {
+      const regex = new RegExp(String.raw`\b${this.escapeRegExp(kw)}\b`, 'gi');
+      residualText = residualText.replaceAll(regex, '');
+    }
+    
+    residualText = residualText.replaceAll(/\s+/g, ' ').trim();
+    if (residualText && residualText.length > 2) {
+      result.query = residualText;
+    }
+    
+    return result;
+  }
+  
+  private escapeRegExp(string: string) {
+    return string.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
   }
 }

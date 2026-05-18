@@ -84,8 +84,19 @@ export interface SearchOcrOptions {
   ocr?: string;
 }
 
+export interface SearchPersonQueryGroup {
+  personIds: string[];
+  minCount?: number;
+}
+
+export interface SearchPersonQuery {
+  includes?: SearchPersonQueryGroup[];
+  excludes?: string[];
+}
+
 export interface SearchPeopleOptions {
   personIds?: string[];
+  personQuery?: SearchPersonQuery;
 }
 
 export interface SearchTagOptions {

@@ -19,8 +19,8 @@ services:
     tmpfs:
       - /tmp
     volumes:
-      - ..:/usr/src/app
-      # - ../../ui:/usr/src/ui
+      # Explicitly pointing to your fastpool directory context so the host daemon maps it cleanly
+      - /mnt/fastpool/apps/devbox/workspace/immich:/usr/src/app
       - pnpm_cache:/buildcache/pnpm_cache
       - server_node_modules:/usr/src/app/server/node_modules
       - web_node_modules:/usr/src/app/web/node_modules
@@ -40,7 +40,7 @@ services:
     container_name: immich_init
     image: immich-server-dev:latest
     build:
-      context: ../
+      context: /mnt/fastpool/apps/devbox/workspace/immich
       dockerfile: server/Dockerfile.dev
       target: dev
     command:
@@ -62,11 +62,11 @@ services:
     extends:
       service: immich-app-base
     profiles: !reset []
-    container_name: immich_server
+    container_name: immich-sandbox_server
     command: ['immich-dev']
     image: immich-server-dev:latest
     build:
-      context: ../
+      context: /mnt/fastpool/apps/devbox/workspace/immich
       dockerfile: server/Dockerfile.dev
       target: dev
     restart: unless-stopped
@@ -74,7 +74,7 @@ services:
       - ${UPLOAD_LOCATION}/photos:/data
       - /etc/localtime:/etc/localtime:ro
       - pnpm_store_server:/buildcache/pnpm-store
-      - ../packages/plugins:/build/corePlugin
+      - /mnt/fastpool/apps/devbox/workspace/immich/packages/plugins:/build/corePlugin
     env_file:
       - .env
     environment:
@@ -95,7 +95,7 @@ services:
     ports:
       - 9230:9230
       - 9231:9231
-      - 2283:2283
+      - 2288:2283  # Shipped host entry port from 2283 -> 2284
     depends_on:
       immich-init:
         condition: service_healthy
@@ -110,18 +110,18 @@ services:
     extends:
       service: immich-app-base
     profiles: !reset []
-    container_name: immich_web
+    container_name: immich-sandbox_web
     image: immich-web-dev:latest
     build:
-      context: ../
+      context: /mnt/fastpool/apps/devbox/workspace/immich
       dockerfile: server/Dockerfile.dev
       target: dev
     command: ['immich-web']
     env_file:
       - .env
     ports:
-      - 3000:3000
-      - 24678:24678
+      - 3010:3000  # Shipped host entry port from 3000 -> 3001
+      - 24679:24678 # Shipped websocket channel port up by 1
     volumes:
       - pnpm_store_web:/buildcache/pnpm-store
     restart: unless-stopped
@@ -132,20 +132,17 @@ services:
         condition: service_started
 
   immich-machine-learning:
-    container_name: immich_machine_learning
+    container_name: immich-sandbox_machine_learning
     image: immich-machine-learning-dev:latest
-    # extends:
-    #   file: hwaccel.ml.yml
-    #   service: cpu # set to one of [armnn, cuda, rocm, openvino, openvino-wsl, rknn] for accelerated inference
     build:
-      context: ../machine-learning
+      context: /mnt/fastpool/apps/devbox/workspace/immich/machine-learning
       dockerfile: Dockerfile
       args:
-        - DEVICE=cpu # set to one of [armnn, cuda, rocm, openvino, openvino-wsl, rknn] for accelerated inference
+        - DEVICE=cpu
     ports:
-      - 3003:3003
+      - 3004:3003  # Shipped ML testing container port up by 1
     volumes:
-      - ../machine-learning/immich_ml:/usr/src/immich_ml
+      - /mnt/fastpool/apps/devbox/workspace/immich/machine-learning/immich_ml:/usr/src/immich_ml
       - model_cache:/cache
     env_file:
       - .env
@@ -156,13 +153,13 @@ services:
       disable: false
 
   redis:
-    container_name: immich_redis
+    container_name: immich-sandbox_redis
     image: docker.io/valkey/valkey:9@sha256:8436e10bc65c94886a91d4415b6a6dfa9cb5a306fb3b996e5bb67cd2b4854193
     healthcheck:
       test: redis-cli ping || exit 1
 
   database:
-    container_name: immich_postgres
+    container_name: immich-sandbox_postgres
     image: ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0@sha256:bcf63357191b76a916ae5eb93464d65c07511da41e3bf7a8416db519b40b1c23
     env_file:
       - .env
@@ -174,30 +171,10 @@ services:
     volumes:
       - ${UPLOAD_LOCATION}/postgres:/var/lib/postgresql/data
     ports:
-      - 5432:5432
+      - 5439:5432  # Shipped postgres sandbox test access up by 1
     shm_size: 128mb
     healthcheck:
       disable: false
-  # set IMMICH_TELEMETRY_INCLUDE=all in .env to enable metrics
-  # immich-prometheus:
-  #   container_name: immich_prometheus
-  #   ports:
-  #     - 9090:9090
-  #   image: prom/prometheus
-  #   volumes:
-  #     - ./prometheus.yml:/etc/prometheus/prometheus.yml
-  #     - prometheus_data:/prometheus
-
-  # first login uses admin/admin
-  # add data source for http://immich-prometheus:9090 to get started
-  # immich-grafana:
-  #   container_name: immich_grafana
-  #   command: ['./run.sh', '-disable-reporting']
-  #   ports:
-  #     - 3000:3000
-  #   image: grafana/grafana:10.3.3-ubuntu
-  #   volumes:
-  #     - grafana_data:/var/lib/grafana
 
 volumes:
   model_cache:

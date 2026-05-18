@@ -61,7 +61,7 @@
   let scrollY = $state(0);
   let scrollYHistory = 0;
 
-  type SearchTerms = MetadataSearchDto & Pick<SmartSearchDto, 'query' | 'queryAssetId'>;
+  type SearchTerms = MetadataSearchDto & Pick<SmartSearchDto, 'query' | 'queryAssetId' | 'personQuery'>;
   let searchQuery = $derived(page.url.searchParams.get(QueryParameter.QUERY));
   let smartSearchEnabled = $derived(featureFlagsManager.value.smartSearch);
   let terms = $derived<SearchTerms>(searchQuery ? JSON.parse(searchQuery) : {});
@@ -224,6 +224,37 @@
     return tagNames.join(', ');
   }
 
+  async function getPersonQueryChips(
+    personQuery: SmartSearchDto['personQuery'],
+  ): Promise<Array<{ type: 'include' | 'exclude'; label: string }>> {
+    const chips: Array<{ type: 'include' | 'exclude'; label: string }> = [];
+    if (!personQuery) {
+      return chips;
+    }
+
+    if (personQuery.includes) {
+      for (const group of personQuery.includes) {
+        if (group.personIds && group.personIds.length > 0) {
+          const names = await getPersonName(group.personIds);
+          const minCount = group.minCount ?? group.personIds.length;
+          const label = minCount === group.personIds.length
+            ? `Includes ${names}`
+            : minCount === 1
+              ? `Includes ${names.replaceAll(', ', ' OR ')}`
+              : `Includes at least ${minCount} of ${names}`;
+          chips.push({ type: 'include', label });
+        }
+      }
+    }
+
+    if (personQuery.excludes && personQuery.excludes.length > 0) {
+      const names = await getPersonName(personQuery.excludes);
+      chips.push({ type: 'exclude', label: `Excludes ${names}` });
+    }
+
+    return chips;
+  }
+
   const onAlbumAddAssets = ({ assetIds }: { assetIds: string[] }) => {
     assetMultiSelectManager.clear();
 
@@ -238,8 +269,9 @@
   }
 
   function removeFilter(key: keyof SearchTerms) {
-    delete terms[key];
-    void goto(Route.search(terms));
+    const updatedTerms = { ...terms };
+    delete updatedTerms[key];
+    void goto(Route.search(updatedTerms));
   }
 </script>
 
@@ -252,47 +284,86 @@
     <div class="flex w-full flex-wrap place-content-center place-items-center gap-2.5 sm:gap-3">
       {#each searchTermKeys as searchKey (searchKey)}
         {@const value = terms[searchKey]}
-        <div
-          class="inline-flex max-w-full items-center rounded-full bg-primary/10 py-1 ps-1 pe-1 text-xs text-primary ring-1 ring-primary/15 transition-shadow hover:ring-primary/25 dark:bg-immich-dark-primary/15 dark:text-immich-dark-primary dark:ring-immich-dark-primary/20 dark:hover:ring-immich-dark-primary/30"
-        >
-          <span
-            class="shrink-0 rounded-full bg-primary px-3 py-1.5 font-medium text-light dark:bg-immich-dark-primary dark:text-immich-dark-gray"
-          >
-            {getHumanReadableSearchKey(searchKey as keyof SearchTerms)}
-          </span>
+        {#if searchKey === 'personQuery'}
+          {#await getPersonQueryChips(value as SmartSearchDto['personQuery']) then chips}
+            {#each chips as chip (chip.label)}
+              <div
+                class="inline-flex max-w-full items-center rounded-full py-1 ps-1 pe-1 text-xs ring-1 transition-shadow
+                {chip.type === 'include'
+                  ? 'bg-primary/10 text-primary ring-primary/15 hover:ring-primary/25 dark:bg-immich-dark-primary/15 dark:text-immich-dark-primary dark:ring-immich-dark-primary/20 dark:hover:ring-immich-dark-primary/30'
+                  : 'bg-rose-500/10 text-rose-600 ring-rose-500/15 hover:ring-rose-500/25 dark:bg-rose-500/15 dark:text-rose-400 dark:ring-rose-500/20 dark:hover:ring-rose-500/30'}"
+              >
+                <span
+                  class="shrink-0 rounded-full px-3 py-1.5 font-medium text-light
+                  {chip.type === 'include'
+                    ? 'bg-primary dark:bg-immich-dark-primary dark:text-immich-dark-gray'
+                    : 'bg-rose-500 dark:bg-rose-500 dark:text-light'}"
+                >
+                  {chip.type === 'include' ? 'AI Filter' : 'AI Exclude'}
+                </span>
 
-          {#if value !== true}
-            <span class="max-w-[min(36rem,55vw)] min-w-0 truncate px-3 py-1.5 text-immich-fg dark:text-immich-dark-fg">
-              {#if (searchKey === 'takenAfter' || searchKey === 'takenBefore') && typeof value === 'string'}
-                {getHumanReadableDate(value)}
-              {:else if searchKey === 'personIds' && Array.isArray(value)}
-                {#await getPersonName(value) then personName}
-                  {personName}
-                {/await}
-              {:else if searchKey === 'tagIds' && (Array.isArray(value) || value === null)}
-                {#await getTagNames(value) then tagNames}
-                  {tagNames}
-                {/await}
-              {:else if searchKey === 'rating'}
-                {$t('rating_count', { values: { count: value ?? 0 } })}
-              {:else if value === null || value === ''}
-                {$t('unknown')}
-              {:else}
-                {value}
-              {/if}
+                <span class="max-w-[min(36rem,55vw)] min-w-0 truncate px-3 py-1.5 text-immich-fg dark:text-immich-dark-fg">
+                  {chip.label}
+                </span>
+
+                <button
+                  type="button"
+                  class="ms-0.5 flex size-7 shrink-0 items-center justify-center rounded-full outline-offset-2 transition-colors focus-visible:outline-2
+                  {chip.type === 'include'
+                    ? 'text-primary outline-immich-primary hover:bg-primary/15 dark:text-immich-dark-primary dark:outline-immich-dark-primary dark:hover:bg-immich-dark-primary/20'
+                    : 'text-rose-600 outline-rose-500 hover:bg-rose-500/15 dark:text-rose-400 dark:outline-rose-500 dark:hover:bg-rose-500/20'}"
+                  aria-label={$t('remove_filter')}
+                  title={$t('remove_filter')}
+                  onclick={() => removeFilter('personQuery')}
+                >
+                  <Icon icon={mdiClose} size="14" />
+                </button>
+              </div>
+            {/each}
+          {/await}
+        {:else}
+          <div
+            class="inline-flex max-w-full items-center rounded-full bg-primary/10 py-1 ps-1 pe-1 text-xs text-primary ring-1 ring-primary/15 transition-shadow hover:ring-primary/25 dark:bg-immich-dark-primary/15 dark:text-immich-dark-primary dark:ring-immich-dark-primary/20 dark:hover:ring-immich-dark-primary/30"
+          >
+            <span
+              class="shrink-0 rounded-full bg-primary px-3 py-1.5 font-medium text-light dark:bg-immich-dark-primary dark:text-immich-dark-gray"
+            >
+              {getHumanReadableSearchKey(searchKey as keyof SearchTerms)}
             </span>
-          {/if}
 
-          <button
-            type="button"
-            class="ms-0.5 flex size-7 shrink-0 items-center justify-center rounded-full text-primary outline-offset-2 outline-immich-primary transition-colors hover:bg-primary/15 focus-visible:outline-2 dark:text-immich-dark-primary dark:outline-immich-dark-primary dark:hover:bg-immich-dark-primary/20"
-            aria-label={$t('remove_filter')}
-            title={$t('remove_filter')}
-            onclick={() => removeFilter(searchKey)}
-          >
-            <Icon icon={mdiClose} size="14" />
-          </button>
-        </div>
+            {#if value !== true}
+              <span class="max-w-[min(36rem,55vw)] min-w-0 truncate px-3 py-1.5 text-immich-fg dark:text-immich-dark-fg">
+                {#if (searchKey === 'takenAfter' || searchKey === 'takenBefore') && typeof value === 'string'}
+                  {getHumanReadableDate(value)}
+                {:else if searchKey === 'personIds' && Array.isArray(value)}
+                  {#await getPersonName(value) then personName}
+                    {personName}
+                  {/await}
+                {:else if searchKey === 'tagIds' && (Array.isArray(value) || value === null)}
+                  {#await getTagNames(value) then tagNames}
+                    {tagNames}
+                  {/await}
+                {:else if searchKey === 'rating'}
+                  {$t('rating_count', { values: { count: value ?? 0 } })}
+                {:else if value === null || value === ''}
+                  {$t('unknown')}
+                {:else}
+                  {value}
+                {/if}
+              </span>
+            {/if}
+
+            <button
+              type="button"
+              class="ms-0.5 flex size-7 shrink-0 items-center justify-center rounded-full text-primary outline-offset-2 outline-immich-primary transition-colors hover:bg-primary/15 focus-visible:outline-2 dark:text-immich-dark-primary dark:outline-immich-dark-primary dark:hover:bg-immich-dark-primary/20"
+              aria-label={$t('remove_filter')}
+              title={$t('remove_filter')}
+              onclick={() => removeFilter(searchKey)}
+            >
+              <Icon icon={mdiClose} size="14" />
+            </button>
+          </div>
+        {/if}
       {/each}
     </div>
   </section>

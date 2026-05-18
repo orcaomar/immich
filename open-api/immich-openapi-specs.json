@@ -9361,6 +9361,54 @@
             }
           },
           {
+            "name": "personQuery",
+            "required": false,
+            "in": "query",
+            "description": "Complex person logic search query",
+            "schema": {
+              "properties": {
+                "includes": {
+                  "description": "Inclusion filters",
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "personIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                        },
+                        "description": "Filter by person IDs"
+                      },
+                      "minCount": {
+                        "description": "Minimum count of people from this group",
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 9007199254740991
+                      }
+                    },
+                    "required": [
+                      "personIds"
+                    ]
+                  }
+                },
+                "excludes": {
+                  "description": "Exclusion filters",
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                  }
+                }
+              },
+              "type": "object"
+            },
+            "style": "deepObject"
+          },
+          {
             "name": "rating",
             "required": false,
             "in": "query",
@@ -10082,6 +10130,57 @@
         ],
         "x-immich-permission": "asset.read",
         "x-immich-state": "Stable"
+      }
+    },
+    "/search/translate-query": {
+      "post": {
+        "description": "Use Gen AI (Gemini) to translate a natural language query into logical search conditions.",
+        "operationId": "translateQuery",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TranslateQueryDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SmartSearchDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api_key": []
+          }
+        ],
+        "summary": "Translate natural language search query to structured people query",
+        "tags": [
+          "Search"
+        ],
+        "x-immich-history": [
+          {
+            "version": "v1",
+            "state": "Added"
+          }
+        ],
+        "x-immich-permission": "asset.read"
       }
     },
     "/server/about": {
@@ -18735,6 +18834,48 @@
             },
             "type": "array"
           },
+          "personQuery": {
+            "description": "Complex person logic search query",
+            "properties": {
+              "excludes": {
+                "description": "Exclusion filters",
+                "items": {
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "includes": {
+                "description": "Inclusion filters",
+                "items": {
+                  "properties": {
+                    "minCount": {
+                      "description": "Minimum count of people from this group",
+                      "maximum": 9007199254740991,
+                      "minimum": 1,
+                      "type": "integer"
+                    },
+                    "personIds": {
+                      "description": "Filter by person IDs",
+                      "items": {
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "personIds"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
           "previewPath": {
             "description": "Filter by preview file path",
             "type": "string"
@@ -20505,6 +20646,48 @@
             },
             "type": "array"
           },
+          "personQuery": {
+            "description": "Complex person logic search query",
+            "properties": {
+              "excludes": {
+                "description": "Exclusion filters",
+                "items": {
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "includes": {
+                "description": "Inclusion filters",
+                "items": {
+                  "properties": {
+                    "minCount": {
+                      "description": "Minimum count of people from this group",
+                      "maximum": 9007199254740991,
+                      "minimum": 1,
+                      "type": "integer"
+                    },
+                    "personIds": {
+                      "description": "Filter by person IDs",
+                      "items": {
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "personIds"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
           "rating": {
             "description": "Filter by rating [1-5], or null for unrated",
             "maximum": 5,
@@ -21879,6 +22062,48 @@
             },
             "type": "array"
           },
+          "personQuery": {
+            "description": "Complex person logic search query",
+            "properties": {
+              "excludes": {
+                "description": "Exclusion filters",
+                "items": {
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "includes": {
+                "description": "Inclusion filters",
+                "items": {
+                  "properties": {
+                    "minCount": {
+                      "description": "Minimum count of people from this group",
+                      "maximum": 9007199254740991,
+                      "minimum": 1,
+                      "type": "integer"
+                    },
+                    "personIds": {
+                      "description": "Filter by person IDs",
+                      "items": {
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "personIds"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
           "query": {
             "description": "Natural language search query",
             "type": "string"
@@ -22148,6 +22373,48 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "personQuery": {
+            "description": "Complex person logic search query",
+            "properties": {
+              "excludes": {
+                "description": "Exclusion filters",
+                "items": {
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "includes": {
+                "description": "Inclusion filters",
+                "items": {
+                  "properties": {
+                    "minCount": {
+                      "description": "Minimum count of people from this group",
+                      "maximum": 9007199254740991,
+                      "minimum": 1,
+                      "type": "integer"
+                    },
+                    "personIds": {
+                      "description": "Filter by person IDs",
+                      "items": {
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "personIds"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
           },
           "rating": {
             "description": "Filter by rating [1-5], or null for unrated",
@@ -25241,6 +25508,18 @@
           "disabled"
         ],
         "type": "string"
+      },
+      "TranslateQueryDto": {
+        "properties": {
+          "query": {
+            "description": "Natural language search query to translate",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "type": "object"
       },
       "TrashResponseDto": {
         "properties": {

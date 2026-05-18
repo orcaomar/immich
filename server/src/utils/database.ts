@@ -247,6 +247,27 @@ export function hasPeople<O>(qb: SelectQueryBuilder<DB, 'asset', O>, personIds: 
   );
 }
 
+export function hasPeopleGroup<O>(
+  qb: SelectQueryBuilder<DB, 'asset', O>,
+  personIds: string[],
+  minCount: number,
+  alias: string,
+) {
+  return qb.innerJoin(
+    (eb: any) =>
+      eb
+        .selectFrom('asset_face')
+        .select('assetId')
+        .where('personId', '=', anyUuid(personIds))
+        .where('deletedAt', 'is', null)
+        .where('isVisible', 'is', true)
+        .groupBy('assetId')
+        .having((eb: any) => eb.fn.count('personId').distinct(), '>=', minCount)
+        .as(alias as any),
+    (join: any) => join.onRef(`${alias}.assetId` as any, '=', 'asset.id'),
+  ) as any;
+}
+
 export function inAlbums<O>(qb: SelectQueryBuilder<DB, 'asset', O>, albumIds: string[]) {
   return qb.innerJoin(
     (eb) =>
@@ -382,6 +403,31 @@ export function searchAssetBuilder(kysely: Kysely<DB>, options: AssetSearchBuild
       qb.where((eb) => eb.not(eb.exists((eb) => eb.selectFrom('tag_asset').whereRef('assetId', '=', 'asset.id')))),
     )
     .$if(!!options.personIds && options.personIds.length > 0, (qb) => hasPeople(qb, options.personIds!))
+    .$if(!!options.personQuery?.includes, (qb) => {
+      let builder = qb;
+      for (let i = 0; i < options.personQuery!.includes!.length; i++) {
+        const group = options.personQuery!.includes![i];
+        if (group.personIds && group.personIds.length > 0) {
+          const minCount = group.minCount ?? group.personIds.length;
+          builder = hasPeopleGroup(builder, group.personIds, minCount, `has_people_group_${i}`);
+        }
+      }
+      return builder;
+    })
+    .$if(!!options.personQuery?.excludes && options.personQuery.excludes.length > 0, (qb) =>
+      qb.where((eb: any) =>
+        eb.not(
+          eb.exists(
+            eb
+              .selectFrom('asset_face')
+              .whereRef('assetId', '=', 'asset.id')
+              .where('personId', '=', anyUuid(options.personQuery!.excludes!))
+              .where('deletedAt', 'is', null)
+              .where('isVisible', 'is', true),
+          ),
+        ),
+      ),
+    )
     .$if(!!options.createdBefore, (qb) => qb.where('asset.createdAt', '<=', options.createdBefore!))
     .$if(!!options.createdAfter, (qb) => qb.where('asset.createdAt', '>=', options.createdAfter!))
     .$if(!!options.updatedBefore, (qb) => qb.where('asset.updatedAt', '<=', options.updatedBefore!))
