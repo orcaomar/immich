@@ -104,7 +104,30 @@
 
   const onHistoryTermClick = async (searchTerm: string) => {
     value = searchTerm;
-    await handleSearch(buildSearchPayload(searchTerm));
+    const searchType = getSearchType();
+    if (searchType === 'ai-query') {
+      isTranslating = true;
+      try {
+        const response = await fetch('/api/search/translate-query', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ query: searchTerm }),
+        });
+        if (!response.ok) {
+          throw new Error('Translation failed');
+        }
+        const translated = await response.json();
+        await handleSearch(translated);
+      } catch {
+        await handleSearch({ query: searchTerm });
+      } finally {
+        isTranslating = false;
+      }
+    } else {
+      await handleSearch(buildSearchPayload(searchTerm));
+    }
   };
 
   const onFilterClick = async () => {
