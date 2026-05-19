@@ -36,6 +36,8 @@ const CreateAlbumSchema = z
     description: z.string().optional().describe('Album description'),
     albumUsers: z.array(AlbumUserCreateSchema).optional().describe('Album users'),
     assetIds: z.array(z.uuidv4()).optional().describe('Initial asset IDs'),
+    isSmart: z.boolean().optional().describe('Is album smart'),
+    criteria: z.record(z.string(), z.any()).optional().describe('Smart album search criteria'),
   })
   .meta({ id: 'CreateAlbumDto' });
 
@@ -60,6 +62,7 @@ const UpdateAlbumSchema = z
     albumThumbnailAssetId: z.uuidv4().optional().describe('Album thumbnail asset ID'),
     isActivityEnabled: z.boolean().optional().describe('Enable activity feed'),
     order: AssetOrderSchema.optional(),
+    criteria: z.record(z.string(), z.any()).optional().describe('Smart album search criteria'),
   })
   .meta({ id: 'UpdateAlbumDto' });
 
@@ -134,6 +137,8 @@ export const AlbumResponseSchema = z
     endDate: z.string().meta({ format: 'date-time' }).optional().describe('End date (latest asset)'),
     isActivityEnabled: z.boolean().describe('Activity feed enabled'),
     order: AssetOrderSchema.optional(),
+    isSmart: z.boolean().describe('Is album smart'),
+    criteria: z.record(z.string(), z.any()).nullable().optional().describe('Smart album search criteria'),
     contributorCounts: z.array(ContributorCountResponseSchema).optional(),
   })
   .meta({ id: 'AlbumResponseDto' });
@@ -162,6 +167,8 @@ export type MapAlbumDto = {
   id: string;
   isActivityEnabled: boolean;
   order: AssetOrder;
+  isSmart: boolean;
+  criteria: Record<string, any> | null;
 };
 
 export const mapAlbum = (entity: MaybeDehydrated<MapAlbumDto>): AlbumResponseDto => {
@@ -204,5 +211,7 @@ export const mapAlbum = (entity: MaybeDehydrated<MapAlbumDto>): AlbumResponseDto
     assetCount: entity.assets?.length || 0,
     isActivityEnabled: entity.isActivityEnabled,
     order: entity.order,
+    isSmart: entity.isSmart,
+    criteria: entity.criteria || null,
   };
 };

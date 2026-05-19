@@ -48,6 +48,12 @@ export class AlbumTable {
   @Column({ default: AssetOrder.Desc })
   order!: Generated<AssetOrder>;
 
+  @Column({ type: 'boolean', default: false })
+  isSmart!: Generated<boolean>;
+
+  @Column({ type: 'jsonb', nullable: true, default: null })
+  criteria!: Record<string, any> | null;
+
   @UpdateIdColumn({ index: true })
   updateId!: Generated<string>;
 }

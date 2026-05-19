@@ -14,6 +14,7 @@ import { SystemMetadataRepository } from 'src/repositories/system-metadata.repos
 import { DB } from 'src/schema';
 import { GeodataPlacesTable } from 'src/schema/tables/geodata-places.table';
 import { NaturalEarthCountriesTable } from 'src/schema/tables/natural-earth-countries.table';
+import { anyUuid } from 'src/utils/database';
 
 export interface MapMarkerSearchOptions {
   isArchived?: boolean;
@@ -75,6 +76,16 @@ export class MapRepository {
     return this.mapMarkersQuery()
       .innerJoin('album_asset', 'asset.id', 'album_asset.assetId')
       .where('album_asset.albumId', '=', albumId)
+      .execute();
+  }
+
+  @GenerateSql({ params: [[DummyValue.UUID]] })
+  getMapMarkersByAssetIds(assetIds: string[]) {
+    if (assetIds.length === 0) {
+      return Promise.resolve([]);
+    }
+    return this.mapMarkersQuery()
+      .where('asset.id', '=', anyUuid(assetIds))
       .execute();
   }
 

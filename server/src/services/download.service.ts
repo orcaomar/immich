@@ -22,7 +22,17 @@ export class DownloadService extends BaseService {
     } else if (dto.albumId) {
       const albumId = dto.albumId;
       await this.requireAccess({ auth, permission: Permission.AlbumDownload, ids: [albumId] });
-      assets = this.downloadRepository.downloadAlbumId(albumId);
+      
+      const album = await this.albumRepository.getById(albumId, { withAssets: true }, auth.user.id);
+      if (album?.isSmart) {
+        const assetIds = album.assets.map((a: any) => a.id);
+        if (assetIds.length === 0) {
+          throw new BadRequestException('Smart Album is empty');
+        }
+        assets = this.downloadRepository.downloadAssetIds(assetIds);
+      } else {
+        assets = this.downloadRepository.downloadAlbumId(albumId);
+      }
     } else if (dto.userId) {
       const userId = dto.userId;
       await this.requireAccess({ auth, permission: Permission.TimelineDownload, ids: [userId] });

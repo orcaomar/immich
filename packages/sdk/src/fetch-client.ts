@@ -464,6 +464,10 @@ export type AlbumResponseDto = {
     contributorCounts?: ContributorCountResponseDto[];
     /** Creation date */
     createdAt: string;
+    /** Smart album search criteria */
+    criteria?: {
+        [key: string]: any;
+    } | null;
     /** Album description */
     description: string;
     /** End date (latest asset) */
@@ -474,6 +478,8 @@ export type AlbumResponseDto = {
     id: string;
     /** Activity feed enabled */
     isActivityEnabled: boolean;
+    /** Is album smart */
+    isSmart: boolean;
     /** Last modified asset timestamp */
     lastModifiedAssetTimestamp?: string;
     order?: AssetOrder;
@@ -496,8 +502,14 @@ export type CreateAlbumDto = {
     albumUsers?: AlbumUserCreateDto[];
     /** Initial asset IDs */
     assetIds?: string[];
+    /** Smart album search criteria */
+    criteria?: {
+        [key: string]: any;
+    };
     /** Album description */
     description?: string;
+    /** Is album smart */
+    isSmart?: boolean;
 };
 export type AlbumsAddAssetsDto = {
     /** Album IDs */
@@ -523,6 +535,10 @@ export type UpdateAlbumDto = {
     albumName?: string;
     /** Album thumbnail asset ID */
     albumThumbnailAssetId?: string;
+    /** Smart album search criteria */
+    criteria?: {
+        [key: string]: any;
+    };
     /** Album description */
     description?: string;
     /** Enable activity feed */
@@ -1609,6 +1625,8 @@ export type MetadataSearchDto = {
             /** Filter by person IDs */
             personIds: string[];
         }[];
+        /** Original untranslated query string */
+        originalQuery?: string;
     };
     /** Filter by preview file path */
     previewPath?: string;
@@ -1734,6 +1752,8 @@ export type RandomSearchDto = {
             /** Filter by person IDs */
             personIds: string[];
         }[];
+        /** Original untranslated query string */
+        originalQuery?: string;
     };
     /** Filter by rating [1-5], or null for unrated */
     rating?: number | null;
@@ -1814,6 +1834,8 @@ export type SmartSearchDto = {
             /** Filter by person IDs */
             personIds: string[];
         }[];
+        /** Original untranslated query string */
+        originalQuery?: string;
     };
     /** Natural language search query */
     query?: string;
@@ -1892,6 +1914,8 @@ export type StatisticsSearchDto = {
             /** Filter by person IDs */
             personIds: string[];
         }[];
+        /** Original untranslated query string */
+        originalQuery?: string;
     };
     /** Filter by rating [1-5], or null for unrated */
     rating?: number | null;
@@ -5429,6 +5453,8 @@ export function searchLargeAssets({ albumIds, city, country, createdAfter, creat
         }[];
         /** Exclusion filters */
         excludes?: string[];
+        /** Original untranslated query string */
+        originalQuery?: string;
     };
     rating?: number | null;
     size?: number;

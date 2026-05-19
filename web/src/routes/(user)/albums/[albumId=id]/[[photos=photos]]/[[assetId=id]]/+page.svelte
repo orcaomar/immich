@@ -72,6 +72,8 @@
     mdiImagePlusOutline,
     mdiLink,
     mdiPlus,
+    mdiAutoFix,
+    mdiMagnify,
     mdiPresentationPlay,
   } from '@mdi/js';
   import { onDestroy } from 'svelte';
@@ -208,6 +210,9 @@
 
   let album = $derived(data.album);
   let albumId = $derived(album.id);
+  let activeQueryText = $derived(
+    album.criteria?.query || album.criteria?.personQuery?.originalQuery || ''
+  );
 
   const containsEditors = $derived(album?.shared && album.albumUsers.some(({ role }) => role === AlbumUserRole.Editor));
   const albumUsers = $derived(showAlbumUsers && containsEditors ? album.albumUsers.map(({ user }) => user) : []);
@@ -363,6 +368,7 @@
                 id={album.id}
                 albumName={album.albumName}
                 {isOwned}
+                isSmart={(album as { isSmart?: boolean }).isSmart}
                 onUpdate={(albumName) => (album = { ...album, albumName })}
               />
 
@@ -415,25 +421,88 @@
                 {isOwned}
                 bind:description={() => album.description, (description) => (album = { ...album, description })}
               />
+
+              {#if album.isSmart && album.criteria}
+                <div class="mt-4 flex flex-wrap items-center gap-2 text-sm">
+                  {#if activeQueryText}
+                    <div class="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-immich-fg shadow-sm backdrop-blur-md transition-all duration-300 hover:border-white/20 dark:text-immich-dark-fg">
+                      <span class="flex items-center text-immich-primary dark:text-immich-dark-primary">
+                        <Icon icon={mdiMagnify} size="16" />
+                      </span>
+                      <span class="text-xs opacity-60">AI Query:</span>
+                      <span class="bg-linear-to-r from-immich-fg to-immich-fg/80 bg-clip-text font-semibold text-transparent italic dark:from-immich-dark-fg dark:to-immich-dark-fg/80">"{activeQueryText}"</span>
+                    </div>
+                  {/if}
+                  <div class="flex items-center gap-1.5 text-xs italic opacity-50">
+                    <span class="relative flex size-2">
+                      <span class="absolute inline-flex size-full animate-ping rounded-full bg-green-400 opacity-75"></span>
+                      <span class="relative inline-flex size-2 rounded-full bg-green-500"></span>
+                    </span>
+                    <span>Dynamic Smart Album</span>
+                  </div>
+                </div>
+              {/if}
             </section>
           {/if}
 
           {#if album.assetCount === 0}
-            <section id="empty-album" class="mt-50 flex place-content-center place-items-center">
-              <div class="w-75">
-                <p class="text-xs uppercase dark:text-immich-dark-fg">{$t('add_photos')}</p>
-                <button
-                  type="button"
-                  onclick={() => (viewMode = AlbumPageViewMode.SELECT_ASSETS)}
-                  class="mt-5 flex w-full place-items-center gap-6 rounded-2xl border bg-subtle p-8 text-immich-fg transition-all hover:bg-gray-100 hover:text-immich-primary dark:border-none dark:text-immich-dark-fg dark:hover:bg-gray-500/20 dark:hover:text-immich-dark-primary"
-                >
-                  <span class="text-primary">
-                    <Icon icon={mdiPlus} size="24" />
-                  </span>
-                  <span class="text-lg">{$t('select_photos')}</span>
-                </button>
-              </div>
-            </section>
+            {#if album.isSmart}
+              <section id="smart-album-rules" class="mt-50 flex place-content-center place-items-center">
+                <div class="w-full max-w-lg rounded-3xl border border-white/10 bg-white/5 p-8 text-immich-fg shadow-2xl backdrop-blur-xl transition-all duration-300 hover:border-white/20 dark:text-immich-dark-fg">
+                  <div class="mb-6 flex items-center gap-4 border-b border-white/10 pb-4">
+                    <div class="flex size-12 items-center justify-center rounded-2xl bg-linear-to-tr from-immich-primary to-blue-400 text-white shadow-lg shadow-immich-primary/30">
+                      <Icon icon={mdiAutoFix} size="24" />
+                    </div>
+                    <div>
+                      <h3 class="text-xl font-bold tracking-tight text-immich-fg dark:text-immich-dark-fg">Dynamic Smart Album</h3>
+                      <p class="text-xs font-semibold tracking-wider text-immich-primary uppercase">Active Search Query Rules</p>
+                    </div>
+                  </div>
+
+                  <div class="space-y-4">
+                    <p class="text-sm opacity-80">This album is dynamically populated based on matching criteria. Standard upload and manual photo selection are disabled.</p>
+                    
+                    {#if activeQueryText}
+                      <div class="flex place-items-center gap-4 rounded-2xl border border-white/5 bg-white/5 p-4">
+                        <div class="text-immich-primary dark:text-immich-dark-primary">
+                          <Icon icon={mdiMagnify} size="24" />
+                        </div>
+                        <div>
+                          <span class="text-xs font-medium uppercase opacity-60">AI Query Criteria</span>
+                          <p class="bg-linear-to-r from-immich-fg to-immich-fg/70 bg-clip-text text-lg font-semibold text-transparent italic dark:from-immich-dark-fg dark:to-immich-dark-fg/70">
+                            "{activeQueryText}"
+                          </p>
+                        </div>
+                      </div>
+                    {/if}
+
+                    <div class="flex items-center gap-3 pt-4 text-xs italic opacity-60">
+                      <span class="relative flex size-2">
+                        <span class="absolute inline-flex size-full animate-ping rounded-full bg-green-400 opacity-75"></span>
+                        <span class="relative inline-flex size-2 rounded-full bg-green-500"></span>
+                      </span>
+                      <span>Listening for incoming matching media uploads...</span>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            {:else}
+              <section id="empty-album" class="mt-50 flex place-content-center place-items-center">
+                <div class="w-75">
+                  <p class="text-xs uppercase dark:text-immich-dark-fg">{$t('add_photos')}</p>
+                  <button
+                    type="button"
+                    onclick={() => (viewMode = AlbumPageViewMode.SELECT_ASSETS)}
+                    class="mt-5 flex w-full place-items-center gap-6 rounded-2xl border bg-subtle p-8 text-immich-fg transition-all hover:bg-gray-100 hover:text-immich-primary dark:border-none dark:text-immich-dark-fg dark:hover:bg-gray-500/20 dark:hover:text-immich-dark-primary"
+                  >
+                    <span class="text-primary">
+                      <Icon icon={mdiPlus} size="24" />
+                    </span>
+                    <span class="text-lg">{$t('select_photos')}</span>
+                  </button>
+                </div>
+              </section>
+            {/if}
           {/if}
         {/if}
       </Timeline>
@@ -477,7 +546,7 @@
             />
             <SetVisibilityAction menuItem onVisibilitySet={handleSetVisibility} />
           {/if}
-          {#if assetMultiSelectManager.assets.length === 1}
+          {#if !(album as { isSmart?: boolean }).isSmart && assetMultiSelectManager.assets.length === 1}
             <MenuOption
               text={$t('set_as_album_cover')}
               icon={mdiImageOutline}
@@ -489,7 +558,7 @@
             <TagAction menuItem />
           {/if}
 
-          {#if isOwned || assetMultiSelectManager.isAllUserOwned}
+          {#if (isOwned || assetMultiSelectManager.isAllUserOwned) && !(album as { isSmart?: boolean }).isSmart}
             <RemoveFromAlbum menuItem bind:album onRemove={handleRemoveAssets} />
           {/if}
           {#if assetMultiSelectManager.isAllUserOwned}
@@ -503,7 +572,7 @@
           {#snippet trailing()}
             <ActionButton action={Cast} />
 
-            {#if isEditor}
+            {#if isEditor && !(album as { isSmart?: boolean }).isSmart}
               <IconButton
                 variant="ghost"
                 shape="round"

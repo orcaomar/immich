@@ -7,14 +7,18 @@
   import { t } from 'svelte-i18n';
   import { fromAction } from 'svelte/attachments';
 
+  import { Icon } from '@immich/ui';
+  import { mdiContentSave } from '@mdi/js';
+
   type Props = {
     id: string;
     albumName: string;
     isOwned: boolean;
+    isSmart?: boolean;
     onUpdate: (albumName: string) => void;
   };
 
-  let { id, albumName = $bindable(), isOwned, onUpdate }: Props = $props();
+  let { id, albumName = $bindable(), isOwned, isSmart = false, onUpdate }: Props = $props();
 
   let newAlbumName = $derived(albumName);
 
@@ -38,21 +42,28 @@
   const textClasses = 'text-2xl lg:text-6xl text-primary';
 </script>
 
-<div class="mb-2">
-  {#if isOwned}
-    <Textarea
-      bind:value={newAlbumName}
-      variant="ghost"
-      title={$t('edit_title')}
-      onblur={handleUpdate}
-      placeholder={$t('add_a_title')}
-      class={textClasses}
-      {@attach fromAction(shortcut, () => ({
-        shortcut: { key: 'Enter' },
-        onShortcut: (event) => event.currentTarget.blur(),
-      }))}
-    />
-  {:else}
-    <div class={textClasses}>{newAlbumName}</div>
+<div class="mb-2 flex items-center gap-3">
+  {#if isSmart}
+    <div class="mt-1 shrink-0 text-primary" title="Smart Album (Dynamic Query)">
+      <Icon icon={mdiContentSave} size="36" />
+    </div>
   {/if}
+  <div class="w-full flex-1">
+    {#if isOwned}
+      <Textarea
+        bind:value={newAlbumName}
+        variant="ghost"
+        title={$t('edit_title')}
+        onblur={handleUpdate}
+        placeholder={$t('add_a_title')}
+        class={textClasses}
+        {@attach fromAction(shortcut, () => ({
+          shortcut: { key: 'Enter' },
+          onShortcut: (event) => event.currentTarget.blur(),
+        }))}
+      />
+    {:else}
+      <div class={textClasses}>{newAlbumName}</div>
+    {/if}
+  </div>
 </div>

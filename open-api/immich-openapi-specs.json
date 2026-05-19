@@ -15650,6 +15650,12 @@
             "format": "date-time",
             "type": "string"
           },
+          "criteria": {
+            "additionalProperties": {},
+            "description": "Smart album search criteria",
+            "nullable": true,
+            "type": "object"
+          },
           "description": {
             "description": "Album description",
             "type": "string"
@@ -15669,6 +15675,10 @@
           },
           "isActivityEnabled": {
             "description": "Activity feed enabled",
+            "type": "boolean"
+          },
+          "isSmart": {
+            "description": "Is album smart",
             "type": "boolean"
           },
           "lastModifiedAssetTimestamp": {
@@ -15704,6 +15714,7 @@
           "hasSharedLink",
           "id",
           "isActivityEnabled",
+          "isSmart",
           "shared",
           "updatedAt"
         ],
@@ -17424,9 +17435,18 @@
             },
             "type": "array"
           },
+          "criteria": {
+            "additionalProperties": {},
+            "description": "Smart album search criteria",
+            "type": "object"
+          },
           "description": {
             "description": "Album description",
             "type": "string"
+          },
+          "isSmart": {
+            "description": "Is album smart",
+            "type": "boolean"
           }
         },
         "required": [
@@ -25611,6 +25631,11 @@
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
             "type": "string"
+          },
+          "criteria": {
+            "additionalProperties": {},
+            "description": "Smart album search criteria",
+            "type": "object"
           },
           "description": {
             "description": "Album description",

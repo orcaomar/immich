@@ -440,6 +440,28 @@ export const utils = {
     await client.query('INSERT INTO asset_face ("assetId", "personId") VALUES ($1, $2)', [assetId, personId]);
   },
 
+  getMockEmbedding: (seedStr: string): number[] => {
+    const embedding = Array.from({ length: 512 }, () => 0);
+    let hash = 0;
+    for (let i = 0; i < seedStr.length; i++) {
+      hash = (seedStr.codePointAt(i) ?? 0) + ((hash << 5) - hash);
+    }
+    for (let i = 0; i < 512; i++) {
+      const val = Math.sin(hash + i) * 0.1;
+      embedding[i] = val;
+    }
+    return embedding;
+  },
+
+  createSmartSearch: async ({ assetId, embedding }: { assetId: string; embedding: number[] }) => {
+    if (!client) {
+      return;
+    }
+
+    const vectorStr = `[${embedding.join(',')}]`;
+    await client.query('INSERT INTO smart_search ("assetId", "embedding") VALUES ($1, $2)', [assetId, vectorStr]);
+  },
+
   setPersonThumbnail: async (personId: string) => {
     if (!client) {
       return;

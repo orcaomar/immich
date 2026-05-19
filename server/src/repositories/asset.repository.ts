@@ -14,6 +14,11 @@ import {
 import { jsonArrayFrom } from 'kysely/helpers/postgres';
 import { isEmpty, isUndefined, omitBy } from 'lodash';
 import { InjectKysely } from 'nestjs-kysely';
+import { MachineLearningRepository } from 'src/repositories/machine-learning.repository';
+import { ConfigRepository } from 'src/repositories/config.repository';
+import { SystemMetadataRepository } from 'src/repositories/system-metadata.repository';
+import { LoggingRepository } from 'src/repositories/logging.repository';
+import { getConfig } from 'src/utils/config';
 import { LockableProperty, Stack } from 'src/database';
 import { Chunked, ChunkedArray, DummyValue, GenerateSql } from 'src/decorators';
 import { AuthDto } from 'src/dtos/auth.dto';
@@ -29,6 +34,7 @@ import {
   anyUuid,
   asUuid,
   hasPeople,
+  hasPeopleGroup,
   removeUndefinedKeys,
   truncatedDate,
   unnest,
@@ -165,9 +171,113 @@ const withBoundingBox = <T>(qb: SelectQueryBuilder<DB, 'asset' | 'asset_exif', T
   );
 };
 
+function applySmartCriteria(qb: any, criteria: any, hasExifJoined: boolean, embedding?: string) {
+  let builder = qb;
+  if (embedding && criteria.query) {
+    builder = builder
+      .innerJoin('smart_search', 'asset.id', 'smart_search.assetId')
+      .where(sql`smart_search.embedding <=> ${embedding}::vector`, '<', sql`0.9`);
+  }
+  if (criteria.tagIds && criteria.tagIds.length > 0) {
+    builder = withTagId(builder, criteria.tagIds[0]);
+  }
+  if (criteria.personIds && criteria.personIds.length > 0) {
+    builder = hasPeople(builder, criteria.personIds);
+  }
+  if (criteria.personQuery?.includes) {
+    for (let i = 0; i < criteria.personQuery.includes.length; i++) {
+      const group = criteria.personQuery.includes[i];
+      if (group.personIds && group.personIds.length > 0) {
+        const minCount = group.minCount ?? group.personIds.length;
+        builder = hasPeopleGroup(builder, group.personIds, minCount, `has_people_group_${i}`);
+      }
+    }
+  }
+  if (criteria.personQuery?.excludes && criteria.personQuery.excludes.length > 0) {
+    builder = builder.where((eb: any) =>
+      eb.not(
+        eb.exists(
+          eb
+            .selectFrom('asset_face')
+            .whereRef('assetId', '=', 'asset.id')
+            .where('personId', '=', anyUuid(criteria.personQuery.excludes))
+            .where('deletedAt', 'is', null)
+            .where('isVisible', 'is', true),
+        ),
+      ),
+    );
+  }
+  if (criteria.isFavorite !== undefined) {
+    builder = builder.where('asset.isFavorite', '=', criteria.isFavorite);
+  }
+
+  const needsExif =
+    criteria.city !== undefined ||
+    criteria.state !== undefined ||
+    criteria.country !== undefined ||
+    criteria.make !== undefined ||
+    criteria.model !== undefined ||
+    criteria.rating !== undefined;
+
+  if (needsExif && !hasExifJoined) {
+    builder = builder.leftJoin('asset_exif', 'asset.id', 'asset_exif.assetId');
+  }
+
+  if (criteria.city !== undefined) {
+    builder = builder.where('asset_exif.city', criteria.city === null ? 'is' : '=', criteria.city);
+  }
+  if (criteria.state !== undefined) {
+    builder = builder.where('asset_exif.state', criteria.state === null ? 'is' : '=', criteria.state);
+  }
+  if (criteria.country !== undefined) {
+    builder = builder.where('asset_exif.country', criteria.country === null ? 'is' : '=', criteria.country);
+  }
+  if (criteria.make !== undefined) {
+    builder = builder.where('asset_exif.make', criteria.make === null ? 'is' : '=', criteria.make);
+  }
+  if (criteria.model !== undefined) {
+    builder = builder.where('asset_exif.model', criteria.model === null ? 'is' : '=', criteria.model);
+  }
+  if (criteria.rating !== undefined) {
+    builder = builder.where('asset_exif.rating', criteria.rating === null ? 'is' : '=', criteria.rating);
+  }
+  if (criteria.takenBefore) {
+    builder = builder.where('asset.fileCreatedAt', '<=', criteria.takenBefore);
+  }
+  if (criteria.takenAfter) {
+    builder = builder.where('asset.fileCreatedAt', '>=', criteria.takenAfter);
+  }
+  return builder;
+}
+
 @Injectable()
 export class AssetRepository {
-  constructor(@InjectKysely() private db: Kysely<DB>) {}
+  constructor(
+    @InjectKysely() private db: Kysely<DB>,
+    private machineLearningRepository: MachineLearningRepository,
+    private configRepository: ConfigRepository,
+    private systemMetadataRepository: SystemMetadataRepository,
+    private loggingRepository: LoggingRepository,
+  ) {
+    this.loggingRepository?.setContext?.(this.constructor.name);
+  }
+
+  private async getEmbeddingForQuery(query: string): Promise<string | undefined> {
+    const config = await getConfig(
+      {
+        configRepo: this.configRepository,
+        metadataRepo: this.systemMetadataRepository,
+        logger: this.loggingRepository,
+      },
+      { withCache: true },
+    );
+    if (!config.machineLearning.enabled || !config.machineLearning.clip.enabled) {
+      return undefined;
+    }
+    return this.machineLearningRepository.encodeText(query, {
+      modelName: config.machineLearning.clip.modelName,
+    });
+  }
 
   @GenerateSql({
     params: [
@@ -706,8 +816,25 @@ export class AssetRepository {
       .executeTakeFirstOrThrow();
   }
 
-  @GenerateSql({ params: [{}] })
   async getTimeBuckets(options: TimeBucketOptions): Promise<TimeBucketItem[]> {
+    let isSmartAlbum = false;
+    let smartCriteria: any = null;
+    let embedding: string | undefined;
+    if (options.albumId) {
+      const album = await this.db
+        .selectFrom('album')
+        .select(['isSmart', 'criteria'])
+        .where('id', '=', options.albumId)
+        .executeTakeFirst();
+      if (album?.isSmart) {
+        isSmartAlbum = true;
+        smartCriteria = album.criteria || {};
+        if (smartCriteria.query) {
+          embedding = await this.getEmbeddingForQuery(smartCriteria.query);
+        }
+      }
+    }
+
     return this.db
       .with('asset', (qb) =>
         qb
@@ -731,11 +858,14 @@ export class AssetRepository {
           })
           .$if(options.visibility === undefined, withDefaultVisibility)
           .$if(!!options.visibility, (qb) => qb.where('asset.visibility', '=', options.visibility!))
-          .$if(!!options.albumId, (qb) =>
+          .$if(!!options.albumId && !isSmartAlbum, (qb) =>
             qb
               .innerJoin('album_asset', 'asset.id', 'album_asset.assetId')
               .where('album_asset.albumId', '=', asUuid(options.albumId!)),
           )
+          .$if(!!options.albumId && isSmartAlbum, (qb) => {
+            return applySmartCriteria(qb, smartCriteria, false, embedding);
+          })
           .$if(!!options.personId, (qb) => hasPeople(qb, [options.personId!]))
           .$if(!!options.withStacked, (qb) =>
             qb
@@ -760,10 +890,25 @@ export class AssetRepository {
       .execute() as any as Promise<TimeBucketItem[]>;
   }
 
-  @GenerateSql({
-    params: [DummyValue.TIME_BUCKET, { withStacked: true }, { user: { id: DummyValue.UUID } }],
-  })
-  getTimeBucket(timeBucket: string, options: TimeBucketOptions, auth: AuthDto) {
+  async getTimeBucket(timeBucket: string, options: TimeBucketOptions, auth: AuthDto) {
+    let isSmartAlbum = false;
+    let smartCriteria: any = null;
+    let embedding: string | undefined;
+    if (options.albumId) {
+      const album = await this.db
+        .selectFrom('album')
+        .select(['isSmart', 'criteria'])
+        .where('id', '=', options.albumId)
+        .executeTakeFirst();
+      if (album?.isSmart) {
+        isSmartAlbum = true;
+        smartCriteria = album.criteria || {};
+        if (smartCriteria.query) {
+          embedding = await this.getEmbeddingForQuery(smartCriteria.query);
+        }
+      }
+    }
+
     const order = options.order ?? 'desc';
     const query = this.db
       .with('cte', (qb) =>
@@ -818,7 +963,7 @@ export class AssetRepository {
             return withBoundingBox(withBoundingCircle, bbox);
           })
           .where(truncatedDate(options.orderBy), '=', timeBucket.replace(/^[+-]/, ''))
-          .$if(!!options.albumId, (qb) =>
+          .$if(!!options.albumId && !isSmartAlbum, (qb) =>
             qb.where((eb) =>
               eb.exists(
                 eb
@@ -828,6 +973,9 @@ export class AssetRepository {
               ),
             ),
           )
+          .$if(!!options.albumId && isSmartAlbum, (qb) => {
+            return applySmartCriteria(qb, smartCriteria, true, embedding);
+          })
           .$if(!!options.personId, (qb) => hasPeople(qb, [options.personId!]))
           .$if(!!options.userIds, (qb) => qb.where('asset.ownerId', '=', anyUuid(options.userIds!)))
           .$if(options.isFavorite !== undefined, (qb) => qb.where('asset.isFavorite', '=', options.isFavorite!))

@@ -73,7 +73,7 @@ export const getAlbumAssetsActions = ($t: MessageFormatter, album: AlbumResponse
     title: $t('add_assets'),
     color: 'primary',
     icon: mdiPlusBoxOutline,
-    $if: () => assets.length > 0,
+    $if: () => !album.isSmart && assets.length > 0,
     onAction: () =>
       addAssetsToAlbums(
         [album.id],
@@ -86,6 +86,7 @@ export const getAlbumAssetsActions = ($t: MessageFormatter, album: AlbumResponse
     title: $t('select_from_computer'),
     description: $t('album_upload_assets'),
     icon: mdiUpload,
+    $if: () => !album.isSmart,
     onAction: () => void openFileUploadDialog({ albumId: album.id }),
   };
 

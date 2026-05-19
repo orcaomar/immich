@@ -11,14 +11,19 @@ import {
 } from 'kysely';
 import { jsonArrayFrom, jsonObjectFrom } from 'kysely/helpers/postgres';
 import { InjectKysely } from 'nestjs-kysely';
+import { MachineLearningRepository } from 'src/repositories/machine-learning.repository';
+import { ConfigRepository } from 'src/repositories/config.repository';
+import { SystemMetadataRepository } from 'src/repositories/system-metadata.repository';
+import { LoggingRepository } from 'src/repositories/logging.repository';
+import { getConfig } from 'src/utils/config';
 import { columns } from 'src/database';
-import { Chunked, ChunkedArray, ChunkedSet, DummyValue, GenerateSql } from 'src/decorators';
+import { Chunked, ChunkedSet, DummyValue, GenerateSql } from 'src/decorators';
 import { AlbumUserCreateDto, MapAlbumDto } from 'src/dtos/album.dto';
 import { AlbumUserRole } from 'src/enum';
 import { DB } from 'src/schema';
 import { AlbumTable } from 'src/schema/tables/album.table';
 import { AssetExifTable } from 'src/schema/tables/asset-exif.table';
-import { asUuid, dummy, withDefaultVisibility } from 'src/utils/database';
+import { asUuid, dummy, withDefaultVisibility, searchAssetBuilder } from 'src/utils/database';
 
 export interface AlbumAssetCount {
   albumId: string;
@@ -26,6 +31,7 @@ export interface AlbumAssetCount {
   startDate: Date | null;
   endDate: Date | null;
   lastModifiedAssetTimestamp: Date | null;
+  albumThumbnailAssetId?: string | null;
 }
 
 export interface AlbumInfoOptions {
@@ -84,11 +90,35 @@ const isAlbumOwned = (ownerId: string) => (eb: ExpressionBuilder<DB, 'album'>) =
 
 @Injectable()
 export class AlbumRepository {
-  constructor(@InjectKysely() private db: Kysely<DB>) {}
+  constructor(
+    @InjectKysely() private db: Kysely<DB>,
+    private machineLearningRepository: MachineLearningRepository,
+    private configRepository: ConfigRepository,
+    private systemMetadataRepository: SystemMetadataRepository,
+    private loggingRepository: LoggingRepository,
+  ) {
+    this.loggingRepository?.setContext?.(this.constructor.name);
+  }
 
-  @GenerateSql({ params: [DummyValue.UUID, { withAssets: true }, DummyValue.UUID] })
-  getById(id: string, options: AlbumInfoOptions, authUserId?: string) {
-    return this.db
+  private async getEmbeddingForQuery(query: string): Promise<string | undefined> {
+    const config = await getConfig(
+      {
+        configRepo: this.configRepository,
+        metadataRepo: this.systemMetadataRepository,
+        logger: this.loggingRepository,
+      },
+      { withCache: true },
+    );
+    if (!config.machineLearning.enabled || !config.machineLearning.clip.enabled) {
+      return undefined;
+    }
+    return this.machineLearningRepository.encodeText(query, {
+      modelName: config.machineLearning.clip.modelName,
+    });
+  }
+
+  async getById(id: string, options: AlbumInfoOptions, authUserId?: string) {
+    const album = await this.db
       .with('album_user', (qb) => qb.selectFrom('album_user').selectAll().where('album_user.albumId', '=', id))
       .selectFrom('album')
       .selectAll('album')
@@ -96,9 +126,61 @@ export class AlbumRepository {
       .where('album.deletedAt', 'is', null)
       .select(withAlbumUsers(authUserId))
       .select(withSharedLink)
-      .$if(options.withAssets, (eb) => eb.select(withAssets))
-      .$narrowType<{ assets: NotNull }>()
       .executeTakeFirst();
+
+    if (!album) {
+      return;
+    }
+
+    let assets: any[] = [];
+    if (options.withAssets) {
+      if (album.isSmart) {
+        const criteria = (album.criteria || {}) as any;
+        let embedding: string | undefined;
+        if (criteria.query) {
+          embedding = await this.getEmbeddingForQuery(criteria.query);
+        }
+
+        let query = searchAssetBuilder(this.db, criteria)
+          .selectAll('asset')
+          .leftJoin('asset_exif', 'asset.id', 'asset_exif.assetId')
+          .select((eb) =>
+            eb.table('asset_exif').$castTo<ShallowDehydrateObject<Selectable<AssetExifTable>>>().as('exifInfo'),
+          )
+          .where('asset.deletedAt', 'is', null)
+          .$call(withDefaultVisibility);
+
+        query =
+          embedding && criteria.query
+            ? query
+                .innerJoin('smart_search', 'asset.id', 'smart_search.assetId')
+                .select(sql<number>`smart_search.embedding <=> ${embedding}::vector`.as('distance'))
+                .where(sql<boolean>`smart_search.embedding <=> ${embedding}::vector < 0.9`)
+                .orderBy('distance', 'asc')
+            : query.orderBy('asset.fileCreatedAt', 'desc');
+
+        assets = await query.execute();
+      } else {
+        assets = await this.db
+          .selectFrom('asset')
+          .selectAll('asset')
+          .leftJoin('asset_exif', 'asset.id', 'asset_exif.assetId')
+          .select((eb) =>
+            eb.table('asset_exif').$castTo<ShallowDehydrateObject<Selectable<AssetExifTable>>>().as('exifInfo'),
+          )
+          .innerJoin('album_asset', 'album_asset.assetId', 'asset.id')
+          .where('album_asset.albumId', '=', id)
+          .where('asset.deletedAt', 'is', null)
+          .$call(withDefaultVisibility)
+          .orderBy('asset.fileCreatedAt', 'desc')
+          .execute();
+      }
+    }
+
+    return {
+      ...album,
+      assets,
+    } as any;
   }
 
   @GenerateSql({ params: [DummyValue.UUID, DummyValue.UUID] })
@@ -157,30 +239,78 @@ export class AlbumRepository {
     return map;
   }
 
-  @GenerateSql({ params: [[DummyValue.UUID]] })
-  @ChunkedArray()
   async getMetadataForIds(ids: string[]): Promise<AlbumAssetCount[]> {
-    // Guard against running invalid query when ids list is empty.
     if (ids.length === 0) {
       return [];
     }
 
-    return (
-      this.db
-        .selectFrom('asset')
-        .$call(withDefaultVisibility)
-        .innerJoin('album_asset', 'album_asset.assetId', 'asset.id')
-        .select('album_asset.albumId as albumId')
+    const albums = await this.db
+      .selectFrom('album')
+      .select(['id', 'isSmart', 'criteria'])
+      .where('id', 'in', ids)
+      .execute();
+
+    const standardIds = albums.filter((a) => !a.isSmart).map((a) => a.id);
+    const standardMetadata = standardIds.length > 0
+      ? await this.db
+          .selectFrom('asset')
+          .$call(withDefaultVisibility)
+          .innerJoin('album_asset', 'album_asset.assetId', 'asset.id')
+          .select('album_asset.albumId as albumId')
+          .select((eb) => eb.fn.min(sql<Date>`("asset"."localDateTime" AT TIME ZONE 'UTC'::text)::date`).as('startDate'))
+          .select((eb) => eb.fn.max(sql<Date>`("asset"."localDateTime" AT TIME ZONE 'UTC'::text)::date`).as('endDate'))
+          .select((eb) => eb.fn.max('asset.updatedAt').as('lastModifiedAssetTimestamp'))
+          .select((eb) => sql<number>`${eb.fn.count('asset.id')}::int`.as('assetCount'))
+          .where('album_asset.albumId', 'in', standardIds)
+          .where('asset.deletedAt', 'is', null)
+          .groupBy('album_asset.albumId')
+          .execute()
+      : [];
+
+    const smartAlbums = albums.filter((a) => a.isSmart);
+    const smartMetadata: AlbumAssetCount[] = [];
+    for (const album of smartAlbums) {
+      const criteria = (album.criteria || {}) as any;
+      let embedding: string | undefined;
+      if (criteria.query) {
+        embedding = await this.getEmbeddingForQuery(criteria.query);
+      }
+
+      let query = searchAssetBuilder(this.db, criteria);
+      if (embedding && criteria.query) {
+        query = query
+          .innerJoin('smart_search', 'asset.id', 'smart_search.assetId')
+          .where(sql`smart_search.embedding <=> ${embedding}::vector`, '<', sql`0.9`);
+      }
+
+      const stats = await query
         .select((eb) => eb.fn.min(sql<Date>`("asset"."localDateTime" AT TIME ZONE 'UTC'::text)::date`).as('startDate'))
         .select((eb) => eb.fn.max(sql<Date>`("asset"."localDateTime" AT TIME ZONE 'UTC'::text)::date`).as('endDate'))
-        // lastModifiedAssetTimestamp is only used in mobile app, please remove if not need
         .select((eb) => eb.fn.max('asset.updatedAt').as('lastModifiedAssetTimestamp'))
         .select((eb) => sql<number>`${eb.fn.count('asset.id')}::int`.as('assetCount'))
-        .where('album_asset.albumId', 'in', ids)
-        .where('asset.deletedAt', 'is', null)
-        .groupBy('album_asset.albumId')
-        .execute()
-    );
+        .executeTakeFirst();
+
+      let albumThumbnailAssetId: string | null = null;
+      if (stats && stats.assetCount > 0) {
+        const thumbnailResult = await query
+          .select('asset.id')
+          .orderBy('asset.fileCreatedAt', 'desc')
+          .limit(1)
+          .executeTakeFirst();
+        albumThumbnailAssetId = thumbnailResult?.id || null;
+      }
+
+      smartMetadata.push({
+        albumId: album.id,
+        startDate: stats?.startDate || null,
+        endDate: stats?.endDate || null,
+        lastModifiedAssetTimestamp: stats?.lastModifiedAssetTimestamp || null,
+        assetCount: stats?.assetCount || 0,
+        albumThumbnailAssetId,
+      });
+    }
+
+    return [...standardMetadata, ...smartMetadata];
   }
 
   private buildAlbumBaseQuery(ownerId: string, { isOwned, isShared }: { isOwned?: boolean; isShared?: boolean }) {

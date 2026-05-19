@@ -45,6 +45,30 @@ export const createAlbumAndRedirect = async (name?: string, assetIds?: string[])
   }
 };
 
+export const createSmartAlbum = async (name: string, criteria: Record<string, unknown>) => {
+  try {
+    const newAlbum: AlbumResponseDto = await sdk.createAlbum({
+      createAlbumDto: {
+        albumName: name,
+        isSmart: true,
+        criteria,
+      },
+    });
+    eventManager.emit('AlbumCreate', newAlbum);
+    return newAlbum;
+  } catch (error) {
+    const $t = get(t);
+    handleError(error, $t('errors.failed_to_create_album'));
+  }
+};
+
+export const createSmartAlbumAndRedirect = async (name: string, criteria: Record<string, unknown>) => {
+  const newAlbum = await createSmartAlbum(name, criteria);
+  if (newAlbum) {
+    await goto(Route.viewAlbum(newAlbum));
+  }
+};
+
 /**
  * -------------
  * Album Sorting

@@ -288,6 +288,36 @@
     }
     void goto(Route.search(updatedTerms));
   }
+
+  import { createSmartAlbumAndRedirect } from '$lib/utils/album-utils';
+  import { mdiContentSave } from '@mdi/js';
+
+  let hasActiveSearch = $derived(
+    Object.keys(terms).length > 0 &&
+      (terms.query !== undefined ||
+        terms.queryAssetId !== undefined ||
+        terms.personQuery !== undefined ||
+        terms.personIds?.length ||
+        terms.tagIds?.length ||
+        terms.isFavorite !== undefined ||
+        terms.city !== undefined ||
+        terms.make !== undefined ||
+        terms.model !== undefined ||
+        terms.takenAfter !== undefined ||
+        terms.takenBefore !== undefined)
+  );
+
+  async function handleSaveAsSmartAlbum() {
+    const name = globalThis.prompt('Enter a name for the Smart Album:', 'Smart Album');
+    if (name === null) {
+      return;
+    }
+    const cleanName = name.trim();
+    if (!cleanName) {
+      return;
+    }
+    await createSmartAlbumAndRedirect(cleanName, terms);
+  }
 </script>
 
 <svelte:window bind:scrollY />
@@ -473,6 +503,19 @@
     {:else}
       <div class="fixed inset-s-0 top-0 z-2 w-full">
         <ControlAppBar onClose={() => goto(previousRoute)} backIcon={mdiArrowLeft}>
+          {#snippet trailing()}
+            {#if hasActiveSearch}
+              <IconButton
+                aria-label="Save as Smart Album"
+                onclick={handleSaveAsSmartAlbum}
+                color="secondary"
+                shape="round"
+                variant="ghost"
+                icon={mdiContentSave}
+                size="large"
+              />
+            {/if}
+          {/snippet}
           <div class="absolute bg-light"></div>
           <div class="w-full flex-1 ps-4">
             <SearchBar grayTheme={false} value={terms?.query ?? ''} searchQuery={terms} />

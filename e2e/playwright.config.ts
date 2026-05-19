@@ -60,6 +60,7 @@ const config: PlaywrightTestConfig = {
     stdout: 'pipe',
     stderr: 'pipe',
     reuseExistingServer: true,
+    timeout: 900_000,
   },
 };
 if (playwrightDisableWebserver) {

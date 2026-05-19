@@ -59,15 +59,21 @@ export class AlbumService extends BaseService {
       albumMetadata[metadata.albumId] = metadata;
     }
 
-    return albums.map((album) => ({
-      ...mapAlbum(album),
-      sharedLinks: undefined,
-      startDate: asDateString(albumMetadata[album.id]?.startDate ?? undefined),
-      endDate: asDateString(albumMetadata[album.id]?.endDate ?? undefined),
-      assetCount: albumMetadata[album.id]?.assetCount ?? 0,
-      // lastModifiedAssetTimestamp is only used in mobile app, please remove if not need
-      lastModifiedAssetTimestamp: asDateString(albumMetadata[album.id]?.lastModifiedAssetTimestamp ?? undefined),
-    }));
+    return albums.map((album) => {
+      const metadata = albumMetadata[album.id];
+      if (metadata?.albumThumbnailAssetId) {
+        album.albumThumbnailAssetId = metadata.albumThumbnailAssetId;
+      }
+      return {
+        ...mapAlbum(album),
+        sharedLinks: undefined,
+        startDate: asDateString(metadata?.startDate ?? undefined),
+        endDate: asDateString(metadata?.endDate ?? undefined),
+        assetCount: metadata?.assetCount ?? 0,
+        // lastModifiedAssetTimestamp is only used in mobile app, please remove if not need
+        lastModifiedAssetTimestamp: asDateString(metadata?.lastModifiedAssetTimestamp ?? undefined),
+      };
+    });
   }
 
   async get(auth: AuthDto, id: string): Promise<AlbumResponseDto> {
@@ -79,6 +85,10 @@ export class AlbumService extends BaseService {
     const hasSharedUsers = album.albumUsers && album.albumUsers.length > 1;
     const hasSharedLink = album.sharedLinks && album.sharedLinks.length > 0;
     const isShared = hasSharedUsers || hasSharedLink;
+
+    if (albumMetadataForIds?.albumThumbnailAssetId) {
+      album.albumThumbnailAssetId = albumMetadataForIds.albumThumbnailAssetId;
+    }
 
     return {
       ...mapAlbum(album),
@@ -95,6 +105,16 @@ export class AlbumService extends BaseService {
 
     if (auth.sharedLink && !auth.sharedLink.showExif) {
       return [];
+    }
+
+    const album = await this.albumRepository.getById(id, { withAssets: true }, auth.user.id);
+    if (!album) {
+      return [];
+    }
+
+    if (album.isSmart) {
+      const assetIds = album.assets.map((a: any) => a.id);
+      return this.mapRepository.getMapMarkersByAssetIds(assetIds);
     }
 
     return this.mapRepository.getAlbumMapMarkers(id);
@@ -130,6 +150,8 @@ export class AlbumService extends BaseService {
         description: dto.description,
         albumThumbnailAssetId: assetIds[0] || null,
         order: getPreferences(userMetadata).albums.defaultAssetOrder,
+        isSmart: dto.isSmart,
+        criteria: dto.criteria,
       },
       assetIds,
       [{ userId: auth.user.id, role: AlbumUserRole.Owner }, ...albumUsers],
@@ -163,6 +185,7 @@ export class AlbumService extends BaseService {
         albumThumbnailAssetId: dto.albumThumbnailAssetId,
         isActivityEnabled: dto.isActivityEnabled,
         order: dto.order,
+        criteria: dto.criteria,
       },
       auth.user.id,
     );
@@ -177,6 +200,9 @@ export class AlbumService extends BaseService {
 
   async addAssets(auth: AuthDto, id: string, dto: BulkIdsDto): Promise<BulkIdResponseDto[]> {
     const album = await this.findOrFail(id, auth.user.id, { withAssets: false });
+    if (album.isSmart) {
+      throw new BadRequestException('Manual additions/removals are not supported on dynamic rule-based albums.');
+    }
     await this.requireAccess({ auth, permission: Permission.AlbumAssetCreate, ids: [id] });
 
     const results = await addAssets(
@@ -197,7 +223,7 @@ export class AlbumService extends BaseService {
         auth.user.id,
       );
 
-      const allUsersExceptUs = album.albumUsers.map(({ user }) => user.id).filter((userId) => userId !== auth.user.id);
+      const allUsersExceptUs = album.albumUsers.map(({ user }: any) => user.id).filter((userId: string) => userId !== auth.user.id);
 
       for (const recipientId of allUsersExceptUs) {
         await this.eventRepository.emit('AlbumUpdate', { id, recipientId });
@@ -238,6 +264,9 @@ export class AlbumService extends BaseService {
         continue;
       }
       const album = await this.findOrFail(albumId, auth.user.id, { withAssets: false });
+      if (album.isSmart) {
+        throw new BadRequestException('Manual additions/removals are not supported on dynamic rule-based albums.');
+      }
       results.error = undefined;
       results.success = true;
 
@@ -253,7 +282,7 @@ export class AlbumService extends BaseService {
         },
         auth.user.id,
       );
-      const allUsersExceptUs = album.albumUsers.map(({ user }) => user.id).filter((userId) => userId !== auth.user.id);
+      const allUsersExceptUs = album.albumUsers.map(({ user }: any) => user.id).filter((userId: string) => userId !== auth.user.id);
       events.push({ id: albumId, recipients: allUsersExceptUs });
     }
 
@@ -271,6 +300,9 @@ export class AlbumService extends BaseService {
     await this.requireAccess({ auth, permission: Permission.AlbumAssetDelete, ids: [id] });
 
     const album = await this.findOrFail(id, auth.user.id, { withAssets: false });
+    if (album.isSmart) {
+      throw new BadRequestException('Manual additions/removals are not supported on dynamic rule-based albums.');
+    }
     const results = await removeAssets(
       auth,
       { access: this.accessRepository, bulk: this.albumRepository },
@@ -295,7 +327,7 @@ export class AlbumService extends BaseService {
         throw new BadRequestException('Cannot add another owner');
       }
 
-      const exists = album.albumUsers.find(({ user: { id } }) => id === userId);
+      const exists = album.albumUsers.find(({ user }: any) => user?.id === userId);
       if (exists) {
         throw new BadRequestException('User already added');
       }
@@ -320,14 +352,14 @@ export class AlbumService extends BaseService {
 
     const album = await this.findOrFail(id, auth.user.id, { withAssets: false });
 
-    const exists = album.albumUsers.find(({ user: { id } }) => id === userId);
+    const exists = album.albumUsers.find(({ user }: any) => user?.id === userId);
     if (!exists) {
       throw new BadRequestException('Album not shared with user');
     }
 
     if (
       exists.role === AlbumUserRole.Owner &&
-      album.albumUsers.filter(({ role }) => role === AlbumUserRole.Owner).length === 1
+      album.albumUsers.filter(({ role }: any) => role === AlbumUserRole.Owner).length === 1
     ) {
       throw new BadRequestException('Cannot remove the last album owner');
     }

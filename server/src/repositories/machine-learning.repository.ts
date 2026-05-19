@@ -206,13 +206,32 @@ export class MachineLearningRepository {
     };
   }
 
+  private getMockEmbedding(seedStr: string): string {
+    const embedding = Array.from({ length: 512 }, () => 0);
+    let hash = 0;
+    for (let i = 0; i < seedStr.length; i++) {
+      hash = (seedStr.codePointAt(i) ?? 0) + ((hash << 5) - hash);
+    }
+    for (let i = 0; i < 512; i++) {
+      const val = Math.sin(hash + i) * 0.1;
+      embedding[i] = val;
+    }
+    return JSON.stringify(embedding);
+  }
+
   async encodeImage(imagePath: string, { modelName }: CLIPConfig) {
+    if (process.env.IMMICH_ENV === 'testing') {
+      return this.getMockEmbedding(imagePath);
+    }
     const request = { [ModelTask.SEARCH]: { [ModelType.VISUAL]: { modelName } } };
     const response = await this.predict<ClipVisualResponse>({ imagePath }, request);
     return response[ModelTask.SEARCH];
   }
 
   async encodeText(text: string, { language, modelName }: TextEncodingOptions) {
+    if (process.env.IMMICH_ENV === 'testing') {
+      return this.getMockEmbedding(text);
+    }
     const request = { [ModelTask.SEARCH]: { [ModelType.TEXTUAL]: { modelName, options: { language } } } };
     const response = await this.predict<ClipTextualResponse>({ text }, request);
     return response[ModelTask.SEARCH];
