@@ -227,19 +227,20 @@ export class SearchService extends BaseService {
 
   async translateQuery(auth: AuthDto, dto: TranslateQueryDto): Promise<SmartSearchDto> {
     const people = await this.personRepository.getDistinctNames(auth.user.id, { withHidden: true });
+    const groups = await this.personGroupRepository.getAllForUser(auth.user.id);
     
     let result: SmartSearchDto | null = null;
     const geminiKey = process.env.IMMICH_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
     if (geminiKey) {
       try {
-        result = await this.translateWithGemini(dto.query, people, geminiKey);
+        result = await this.translateWithGemini(dto.query, people, groups, geminiKey);
       } catch {
         // Fallback to local parser on Gemini API errors
       }
     }
     
     if (!result) {
-      result = this.translateWithLocalParser(dto.query, people);
+      result = this.translateWithLocalParser(dto.query, people, groups);
     }
 
     if (result && result.personQuery) {
@@ -252,6 +253,7 @@ export class SearchService extends BaseService {
   private async translateWithGemini(
     query: string,
     people: Array<{ id: string; name: string }>,
+    groups: Array<{ id: string; name: string; personIds: string[] }>,
     apiKey: string,
   ): Promise<SmartSearchDto | null> {
     const model = 'gemini-1.5-flash';
@@ -260,6 +262,9 @@ export class SearchService extends BaseService {
     const prompt = `You are a search assistant that translates a natural language search query into a structured JSON query object for a photo library search engine.
 The library has the following recognized people:
 ${people.map((p) => `- Name: "${p.name}", ID: "${p.id}"`).join('\n')}
+
+The library has the following defined person groups:
+${groups.map((g) => `- Group Name: "${g.name}", Member Person IDs: [${g.personIds.join(', ')}]`).join('\n')}
 
 Translate the following user query:
 "${query}"
@@ -280,6 +285,7 @@ interface SearchQuery {
 Rules:
 - Identify people mentioned in the query and map them to their corresponding IDs.
 - If a person is mentioned but not in the recognized people list, do not include their ID.
+- If a person group is mentioned by its Group Name, include ALL of its Member Person IDs in the personIds array of the includes or excludes list as requested.
 - Formulate the logical conditions (includes with minCount, and excludes) exactly as requested.
 - If the user asks for "at least X of these people", set minCount to X.
 - If they ask for "Alice AND Bob", group them in the same includes group with minCount = 2 (or set separate includes groups if required).
@@ -320,6 +326,7 @@ Rules:
   private translateWithLocalParser(
     query: string,
     people: Array<{ id: string; name: string }>,
+    groups: Array<{ id: string; name: string; personIds: string[] }>,
   ): SmartSearchDto {
     const normalizedQuery = query.toLowerCase();
     const result: SmartSearchDto = {};
@@ -343,6 +350,19 @@ Rules:
       const words = lowerText.split(/\s+/)
         .map(w => w.replaceAll(/[^\w\p{L}\p{N}]/gu, ''))
         .filter(Boolean);
+
+      for (const g of groups) {
+        if (!g.name) {
+          continue;
+        }
+        const lowerName = g.name.toLowerCase();
+        const nameParts = lowerName.split(/\s+/).map((n) => n.replaceAll(/[^\w\p{L}\p{N}]/gu, '')).filter(Boolean);
+        if (nameParts.length > 0 && nameParts.every((part) => words.includes(part))) {
+          for (const id of g.personIds) {
+            matched.add(id);
+          }
+        }
+      }
         
       for (const word of words) {
         if (word.length <= 2) {
@@ -445,13 +465,30 @@ Rules:
         }
       }
     }
+
+    const matchedGroups = groups.filter(g => includes.some(id => g.personIds.includes(id)) || excludes.some(id => g.personIds.includes(id)));
+    for (const g of matchedGroups) {
+      if (g.name) {
+        const fullRegex = new RegExp(String.raw`\b${this.escapeRegExp(g.name)}\b`, 'gi');
+        residualText = residualText.replaceAll(fullRegex, '');
+        
+        const words = g.name.split(/\s+/);
+        for (const word of words) {
+          if (word.length > 2) {
+            const wordRegex = new RegExp(String.raw`\b${this.escapeRegExp(word)}\b`, 'gi');
+            residualText = residualText.replaceAll(wordRegex, '');
+          }
+        }
+      }
+    }
     
     const keywords = [
       ...negators,
       'but', 'and', 'or', 'any', 'of', 'at least', 'min', 'minimum', 
       'photos', 'photo', 'show', 'see', 'me', 'want', 'i', 'to',
       'includes', 'include', 'contains', 'contain', 'with',
-      'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'
+      'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
+      'people', 'person', 'group', 'from'
     ];
     for (const kw of keywords) {
       const regex = new RegExp(String.raw`\b${this.escapeRegExp(kw)}\b`, 'gi');

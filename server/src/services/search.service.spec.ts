@@ -300,8 +300,32 @@ describe(SearchService.name, () => {
       { id: 'uuid-zoya', name: 'Zoya' },
     ];
 
+    const mockGroups = [
+      { id: 'uuid-group-1', name: 'Close Family', personIds: ['uuid-alice', 'uuid-bob', 'uuid-charlie'] },
+    ];
+
     beforeEach(() => {
       mocks.person.getDistinctNames.mockResolvedValue(mockPeople);
+      mocks.personGroup.getAllForUser.mockResolvedValue(mockGroups);
+    });
+
+    it('should correctly expand person groups into member IDs', async () => {
+      const auth = AuthFactory.create();
+      const result = await sut.translateQuery(auth, {
+        query: 'at least 2 people from Close Family',
+      });
+
+      expect(result).toEqual({
+        personQuery: {
+          includes: [
+            {
+              personIds: ['uuid-alice', 'uuid-bob', 'uuid-charlie'],
+              minCount: 2,
+            },
+          ],
+          originalQuery: 'at least 2 people from Close Family',
+        },
+      });
     });
 
     it('should correctly parse standard inclusions and exclusions locally', async () => {

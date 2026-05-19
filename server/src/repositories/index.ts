@@ -29,6 +29,7 @@ import { OAuthRepository } from 'src/repositories/oauth.repository';
 import { OcrRepository } from 'src/repositories/ocr.repository';
 import { PartnerRepository } from 'src/repositories/partner.repository';
 import { PersonRepository } from 'src/repositories/person.repository';
+import { PersonGroupRepository } from 'src/repositories/person-group.repository';
 import { PluginRepository } from 'src/repositories/plugin.repository';
 import { ProcessRepository } from 'src/repositories/process.repository';
 import { SearchRepository } from 'src/repositories/search.repository';
@@ -83,6 +84,7 @@ export const repositories = [
   OcrRepository,
   PartnerRepository,
   PersonRepository,
+  PersonGroupRepository,
   PluginRepository,
   ProcessRepository,
   SearchRepository,

@@ -1494,6 +1494,19 @@ export type PersonStatisticsResponseDto = {
     /** Number of assets */
     assets: number;
 };
+export type PersonGroupResponseDto = {
+    id: string;
+    name: string;
+    personIds: string[];
+};
+export type PersonGroupCreateDto = {
+    name: string;
+    personIds?: string[];
+};
+export type PersonGroupUpdateDto = {
+    name?: string;
+    personIds?: string[];
+};
 export type PluginMethodResponseDto = {
     /** Description */
     description: string;
@@ -5261,6 +5274,57 @@ export function getPersonThumbnail({ id }: {
     }>(`/people/${encodeURIComponent(id)}/thumbnail`, {
         ...opts
     }));
+}
+export function getAll(opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 200;
+        data: PersonGroupResponseDto[];
+    }>("/person-groups", {
+        ...opts
+    }));
+}
+export function create({ personGroupCreateDto }: {
+    personGroupCreateDto: PersonGroupCreateDto;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 201;
+        data: PersonGroupResponseDto;
+    }>("/person-groups", oazapfts.json({
+        ...opts,
+        method: "POST",
+        body: personGroupCreateDto
+    })));
+}
+export function deletePersonGroupsById({ id }: {
+    id: string;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchText(`/person-groups/${encodeURIComponent(id)}`, {
+        ...opts,
+        method: "DELETE"
+    }));
+}
+export function getById({ id }: {
+    id: string;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 200;
+        data: PersonGroupResponseDto;
+    }>(`/person-groups/${encodeURIComponent(id)}`, {
+        ...opts
+    }));
+}
+export function update({ id, personGroupUpdateDto }: {
+    id: string;
+    personGroupUpdateDto: PersonGroupUpdateDto;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 200;
+        data: PersonGroupResponseDto;
+    }>(`/person-groups/${encodeURIComponent(id)}`, oazapfts.json({
+        ...opts,
+        method: "PUT",
+        body: personGroupUpdateDto
+    })));
 }
 /**
  * List all plugins
