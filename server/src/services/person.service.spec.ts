@@ -1215,6 +1215,7 @@ describe(PersonService.name, () => {
         newPersonId: person.id,
         oldPersonId: mergePerson.id,
       });
+      expect(mocks.personGroup.replacePersonId).toHaveBeenCalledWith(mergePerson.id, person.id);
 
       expect(mocks.access.person.checkOwnerAccess).toHaveBeenCalledWith(auth.user.id, new Set([person.id]));
     });
@@ -1240,6 +1241,7 @@ describe(PersonService.name, () => {
         newPersonId: person.id,
         oldPersonId: mergePerson.id,
       });
+      expect(mocks.personGroup.replacePersonId).toHaveBeenCalledWith(mergePerson.id, person.id);
 
       expect(mocks.person.update).toHaveBeenCalledWith({
         id: person.id,
@@ -1315,6 +1317,22 @@ describe(PersonService.name, () => {
       mocks.person.getById.mockResolvedValue(person);
       await expect(sut.getStatistics(auth, person.id)).rejects.toBeInstanceOf(BadRequestException);
       expect(mocks.access.person.checkOwnerAccess).toHaveBeenCalledWith(auth.user.id, new Set([person.id]));
+    });
+  });
+
+  describe('delete', () => {
+    it('should delete a person and clean up custom groups', async () => {
+      const auth = AuthFactory.create();
+      const person = PersonFactory.create();
+
+      mocks.person.getById.mockResolvedValueOnce(person);
+      mocks.person.getForPeopleDelete.mockResolvedValueOnce([person]);
+      mocks.access.person.checkOwnerAccess.mockResolvedValueOnce(new Set([person.id]));
+
+      await expect(sut.delete(auth, person.id)).resolves.toBeUndefined();
+
+      expect(mocks.personGroup.removePersonIds).toHaveBeenCalledWith([person.id]);
+      expect(mocks.person.delete).toHaveBeenCalledWith([person.id]);
     });
   });
 

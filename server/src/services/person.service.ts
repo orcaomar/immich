@@ -255,6 +255,7 @@ export class PersonService extends BaseService {
   @Chunked()
   private async removeAllPeople(people: { id: string; thumbnailPath: string }[]) {
     await Promise.all(people.map((person) => this.storageRepository.unlink(person.thumbnailPath)));
+    await this.personGroupRepository.removePersonIds(people.map((person) => person.id));
     await this.personRepository.delete(people.map((person) => person.id));
     this.logger.debug(`Deleted ${people.length} people`);
   }
@@ -604,6 +605,7 @@ export class PersonService extends BaseService {
         this.logger.log(`Merging ${mergeName} into ${primaryName}`);
 
         await this.personRepository.reassignFaces(mergeData);
+        await this.personGroupRepository.replacePersonId(mergeId, id);
         await this.removeAllPeople([mergePerson]);
 
         this.logger.log(`Merged ${mergeName} into ${primaryName}`);
