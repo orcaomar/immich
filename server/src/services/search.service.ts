@@ -264,7 +264,7 @@ The library has the following recognized people:
 ${people.map((p) => `- Name: "${p.name}", ID: "${p.id}"`).join('\n')}
 
 The library has the following defined person groups:
-${groups.map((g) => `- Group Name: "${g.name}", Member Person IDs: [${g.personIds.join(', ')}]`).join('\n')}
+${groups.map((g) => `- Group Name: "${g.name}", ID: "${g.id}", Member Person IDs: [${g.personIds.join(', ')}]`).join('\n')}
 
 Translate the following user query:
 "${query}"
@@ -275,7 +275,8 @@ interface SearchQuery {
   query?: string; // Any conceptual text filter remaining (e.g. "beach", "dogs", "sunset") after extracting the people logic
   personQuery?: {
     includes?: Array<{
-      personIds: string[];
+      personIds?: string[];
+      groupId?: string;
       minCount?: number;
     }>;
     excludes?: string[];
@@ -285,7 +286,7 @@ interface SearchQuery {
 Rules:
 - Identify people mentioned in the query and map them to their corresponding IDs.
 - If a person is mentioned but not in the recognized people list, do not include their ID.
-- If a person group is mentioned by its Group Name, include ALL of its Member Person IDs in the personIds array of the includes or excludes list as requested.
+- If a person group is mentioned by its Group Name, include its Group ID as groupId in an item in the includes list. Do NOT list its Member Person IDs in personIds; instead, reference it dynamically by setting the groupId.
 - Formulate the logical conditions (includes with minCount, and excludes) exactly as requested.
 - If the user asks for "at least X of these people", set minCount to X.
 - If they ask for "Alice AND Bob", group them in the same includes group with minCount = 2 (or set separate includes groups if required).
@@ -343,8 +344,9 @@ Rules:
     const includePart = excludeIndex === -1 ? query : query.slice(0, excludeIndex);
     const excludePart = excludeIndex === -1 ? '' : query.slice(excludeIndex);
     
-    const findPeople = (text: string) => {
-      const matched = new Set<string>();
+    const findPeopleAndGroups = (text: string) => {
+      const matchedPeople = new Set<string>();
+      const matchedGroups = new Set<string>();
       const lowerText = text.toLowerCase();
       
       const words = lowerText.split(/\s+/)
@@ -358,9 +360,7 @@ Rules:
         const lowerName = g.name.toLowerCase();
         const nameParts = lowerName.split(/\s+/).map((n) => n.replaceAll(/[^\w\p{L}\p{N}]/gu, '')).filter(Boolean);
         if (nameParts.length > 0 && nameParts.every((part) => words.includes(part))) {
-          for (const id of g.personIds) {
-            matched.add(id);
-          }
+          matchedGroups.add(g.id);
         }
       }
         
@@ -388,56 +388,91 @@ Rules:
         }
         
         if (bestCandidate) {
-          matched.add(bestCandidate.id);
+          matchedPeople.add(bestCandidate.id);
         }
       }
       
-      return [...matched];
+      return {
+        people: [...matchedPeople],
+        groups: [...matchedGroups],
+      };
     };
     
-    const includes = findPeople(includePart);
-    const excludes = findPeople(excludePart);
+    const includesData = findPeopleAndGroups(includePart);
+    const excludesData = findPeopleAndGroups(excludePart);
+    
+    const excludes: string[] = [...excludesData.people];
+    for (const gid of excludesData.groups) {
+      const g = groups.find(group => group.id === gid);
+      if (g) {
+        for (const pid of g.personIds) {
+          if (!excludes.includes(pid)) {
+            excludes.push(pid);
+          }
+        }
+      }
+    }
     
     const personQuery: any = {};
+    const includesList: any[] = [];
     
-    if (includes.length > 0) {
-      let minCount = includes.length;
-      
-      const lowerInclude = includePart.toLowerCase();
-      if (lowerInclude.includes(' or ') || lowerInclude.includes(' any of ')) {
-        minCount = 1;
-      }
-      
-      const numberWords: Record<string, number> = {
-        one: 1,
-        two: 2,
-        three: 3,
-        four: 4,
-        five: 5,
-        six: 6,
-        seven: 7,
-        eight: 8,
-        nine: 9,
-        ten: 10,
-      };
+    let minCountFromText: number | null = null;
+    const lowerInclude = includePart.toLowerCase();
+    
+    if (lowerInclude.includes(' or ') || lowerInclude.includes(' any of ')) {
+      minCountFromText = 1;
+    }
+    
+    const numberWords: Record<string, number> = {
+      one: 1, two: 2, three: 3, four: 4, five: 5,
+      six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+    };
 
-      const atLeastRegex = /(?:at least|min|minimum|any|of)\s*(\d+|one|two|three|four|five|six|seven|eight|nine|ten)/i;
-      const match = atLeastRegex.exec(lowerInclude);
-      if (match) {
-        const matchValue = match[1].toLowerCase();
-        let parsed = Number.parseInt(matchValue, 10);
-        if (Number.isNaN(parsed)) {
-          parsed = numberWords[matchValue] || 1;
-        }
-        if (parsed > 0 && parsed <= includes.length) {
-          minCount = parsed;
-        }
+    const atLeastRegex = /(?:at least|min|minimum|any|of)\s*(\d+|one|two|three|four|five|six|seven|eight|nine|ten)/i;
+    const match = atLeastRegex.exec(lowerInclude);
+    if (match) {
+      const matchValue = match[1].toLowerCase();
+      let parsed = Number.parseInt(matchValue, 10);
+      if (Number.isNaN(parsed)) {
+        parsed = numberWords[matchValue] || 1;
       }
-      
-      personQuery.includes = [{
-        personIds: includes,
+      if (parsed > 0) {
+        minCountFromText = parsed;
+      }
+    }
+    
+    for (const gid of includesData.groups) {
+      const g = groups.find(group => group.id === gid);
+      let groupMinCount = minCountFromText;
+      if (groupMinCount && g && groupMinCount > g.personIds.length) {
+        groupMinCount = g.personIds.length;
+      }
+      includesList.push({
+        groupId: gid,
+        ...(groupMinCount ? { minCount: groupMinCount } : {}),
+      });
+    }
+    
+    const remainingPeople = includesData.people.filter(pid => {
+      return !includesData.groups.some(gid => {
+        const g = groups.find(group => group.id === gid);
+        return g?.personIds.includes(pid);
+      });
+    });
+    
+    if (remainingPeople.length > 0) {
+      let minCount = minCountFromText || remainingPeople.length;
+      if (minCount > remainingPeople.length) {
+        minCount = remainingPeople.length;
+      }
+      includesList.push({
+        personIds: remainingPeople,
         minCount,
-      }];
+      });
+    }
+    
+    if (includesList.length > 0) {
+      personQuery.includes = includesList;
     }
     
     if (excludes.length > 0) {
@@ -447,10 +482,17 @@ Rules:
     if (Object.keys(personQuery).length > 0) {
       result.personQuery = personQuery;
     }
-    
+
     let residualText = query;
+    const includesPeopleIds: string[] = [];
+    for (const inc of includesList) {
+      if (inc.personIds) {
+        includesPeopleIds.push(...inc.personIds);
+      }
+    }
+    
     // Strip matched people names (both full names and their individual component words)
-    const matchedPeople = people.filter(p => includes.includes(p.id) || excludes.includes(p.id));
+    const matchedPeople = people.filter(p => includesPeopleIds.includes(p.id) || excludes.includes(p.id));
     for (const p of matchedPeople) {
       if (p.name) {
         const fullRegex = new RegExp(String.raw`\b${this.escapeRegExp(p.name)}\b`, 'gi');
@@ -466,7 +508,10 @@ Rules:
       }
     }
 
-    const matchedGroups = groups.filter(g => includes.some(id => g.personIds.includes(id)) || excludes.some(id => g.personIds.includes(id)));
+    const matchedGroups = groups.filter(g => 
+      includesData.groups.includes(g.id) || 
+      excludesData.groups.includes(g.id)
+    );
     for (const g of matchedGroups) {
       if (g.name) {
         const fullRegex = new RegExp(String.raw`\b${this.escapeRegExp(g.name)}\b`, 'gi');

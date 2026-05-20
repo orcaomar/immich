@@ -593,4 +593,172 @@ export class AlbumRepository {
       .onConflict((oc) => oc.doNothing())
       .execute();
   }
+
+  async replacePersonIdInSmartCriteria(oldId: string, newId: string | null): Promise<void> {
+    const albums = await this.db
+      .selectFrom('album')
+      .select(['id', 'criteria'])
+      .where('isSmart', '=', true)
+      .where('deletedAt', 'is', null)
+      .execute();
+
+    for (const album of albums) {
+      if (!album.criteria) {
+        continue;
+      }
+      
+      const criteriaStr = JSON.stringify(album.criteria);
+      if (!criteriaStr.includes(oldId)) {
+        continue;
+      }
+
+      const criteria = JSON.parse(criteriaStr);
+      let changed = false;
+
+      if (Array.isArray(criteria.personIds)) {
+        const index = criteria.personIds.indexOf(oldId);
+        if (index !== -1) {
+          if (newId) {
+            if (!criteria.personIds.includes(newId)) {
+              criteria.personIds[index] = newId;
+            } else {
+              criteria.personIds.splice(index, 1);
+            }
+          } else {
+            criteria.personIds.splice(index, 1);
+          }
+          changed = true;
+        }
+      }
+
+      if (criteria.personQuery) {
+        if (Array.isArray(criteria.personQuery.includes)) {
+          for (const group of criteria.personQuery.includes) {
+            if (Array.isArray(group.personIds)) {
+              const index = group.personIds.indexOf(oldId);
+              if (index !== -1) {
+                if (newId) {
+                  if (!group.personIds.includes(newId)) {
+                    group.personIds[index] = newId;
+                  } else {
+                    group.personIds.splice(index, 1);
+                  }
+                } else {
+                  group.personIds.splice(index, 1);
+                }
+                changed = true;
+              }
+            }
+          }
+          
+          const originalLength = criteria.personQuery.includes.length;
+          criteria.personQuery.includes = criteria.personQuery.includes.filter(
+            (group: any) => !(!group.groupId && (!group.personIds || group.personIds.length === 0))
+          );
+          if (criteria.personQuery.includes.length !== originalLength) {
+            changed = true;
+          }
+        }
+
+        if (Array.isArray(criteria.personQuery.excludes)) {
+          const index = criteria.personQuery.excludes.indexOf(oldId);
+          if (index !== -1) {
+            if (newId) {
+              if (!criteria.personQuery.excludes.includes(newId)) {
+                criteria.personQuery.excludes[index] = newId;
+              } else {
+                criteria.personQuery.excludes.splice(index, 1);
+              }
+            } else {
+              criteria.personQuery.excludes.splice(index, 1);
+            }
+            changed = true;
+          }
+        }
+      }
+
+      if (changed) {
+        await this.db
+          .updateTable('album')
+          .set({ criteria: JSON.stringify(criteria) as any })
+          .where('id', '=', album.id)
+          .execute();
+      }
+    }
+  }
+
+  async getSmartAlbumsUsingGroup(groupId: string, groupName: string): Promise<Array<{ id: string; albumName: string }>> {
+    const albums = await this.db
+      .selectFrom('album')
+      .select(['id', 'albumName', 'criteria'])
+      .where('isSmart', '=', true)
+      .where('deletedAt', 'is', null)
+      .execute();
+
+    const matched: Array<{ id: string; albumName: string }> = [];
+    for (const album of albums) {
+      if (!album.criteria) {
+        continue;
+      }
+      const criteriaStr = JSON.stringify(album.criteria);
+      let usesGroup = false;
+
+      if (criteriaStr.includes(groupId)) {
+        const criteria = JSON.parse(criteriaStr);
+        if (criteria.personQuery?.includes) {
+          usesGroup = criteria.personQuery.includes.some((group: any) => group.groupId === groupId);
+        }
+      }
+
+      if (!usesGroup && groupName) {
+        const criteria = JSON.parse(criteriaStr);
+        if (criteria.query && criteria.query.toLowerCase().includes(groupName.toLowerCase())) {
+          usesGroup = true;
+        }
+      }
+
+      if (usesGroup) {
+        matched.push({ id: album.id, albumName: album.albumName });
+      }
+    }
+    return matched;
+  }
+
+  async getSmartAlbumsUsingPerson(personId: string): Promise<Array<{ id: string; albumName: string }>> {
+    const albums = await this.db
+      .selectFrom('album')
+      .select(['id', 'albumName', 'criteria'])
+      .where('isSmart', '=', true)
+      .where('deletedAt', 'is', null)
+      .execute();
+
+    const matched: Array<{ id: string; albumName: string }> = [];
+    for (const album of albums) {
+      if (!album.criteria) {
+        continue;
+      }
+      const criteriaStr = JSON.stringify(album.criteria);
+      if (criteriaStr.includes(personId)) {
+        const criteria = JSON.parse(criteriaStr);
+        let usesPerson = false;
+        if (Array.isArray(criteria.personIds) && criteria.personIds.includes(personId)) {
+          usesPerson = true;
+        }
+        if (criteria.personQuery) {
+          if (Array.isArray(criteria.personQuery.includes)) {
+            usesPerson = usesPerson || criteria.personQuery.includes.some(
+              (group: any) => Array.isArray(group.personIds) && group.personIds.includes(personId)
+            );
+          }
+          if (Array.isArray(criteria.personQuery.excludes) && criteria.personQuery.excludes.includes(personId)) {
+            usesPerson = true;
+          }
+        }
+        if (usesPerson) {
+          matched.push({ id: album.id, albumName: album.albumName });
+        }
+      }
+    }
+    return matched;
+  }
 }

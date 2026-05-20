@@ -1812,6 +1812,90 @@
         "x-immich-state": "Stable"
       }
     },
+    "/albums/smart/usage/group/{groupId}": {
+      "get": {
+        "description": "Find all Smart Albums that are using the specified custom group.",
+        "operationId": "getSmartAlbumsUsingGroup",
+        "parameters": [
+          {
+            "name": "groupId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api_key": []
+          }
+        ],
+        "summary": "Get Smart Albums using a custom group",
+        "tags": [
+          "Albums"
+        ],
+        "x-immich-history": [
+          {
+            "version": "v1",
+            "state": "Added"
+          }
+        ]
+      }
+    },
+    "/albums/smart/usage/person/{personId}": {
+      "get": {
+        "description": "Find all Smart Albums that are using the specified person directly.",
+        "operationId": "getSmartAlbumsUsingPerson",
+        "parameters": [
+          {
+            "name": "personId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api_key": []
+          }
+        ],
+        "summary": "Get Smart Albums using a person",
+        "tags": [
+          "Albums"
+        ],
+        "x-immich-history": [
+          {
+            "version": "v1",
+            "state": "Added"
+          }
+        ]
+      }
+    },
     "/albums/statistics": {
       "get": {
         "description": "Returns statistics about the albums available to the authenticated user.",
@@ -9680,13 +9764,19 @@
                     "type": "object",
                     "properties": {
                       "personIds": {
+                        "description": "Filter by person IDs",
                         "type": "array",
                         "items": {
                           "type": "string",
                           "format": "uuid",
                           "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
-                        },
-                        "description": "Filter by person IDs"
+                        }
+                      },
+                      "groupId": {
+                        "description": "Filter by custom group ID",
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                       },
                       "minCount": {
                         "description": "Minimum count of people from this group",
@@ -9694,10 +9784,7 @@
                         "minimum": 1,
                         "maximum": 9007199254740991
                       }
-                    },
-                    "required": [
-                      "personIds"
-                    ]
+                    }
                   }
                 },
                 "excludes": {
@@ -13697,6 +13784,17 @@
             }
           },
           {
+            "name": "groupId",
+            "required": false,
+            "in": "query",
+            "description": "Filter assets by custom group ID",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
             "name": "isFavorite",
             "required": false,
             "in": "query",
@@ -13892,6 +13990,17 @@
             "description": "Bounding box coordinates as west,south,east,north (WGS84)",
             "schema": {
               "example": "11.075683,49.416711,11.117589,49.454875",
+              "type": "string"
+            }
+          },
+          {
+            "name": "groupId",
+            "required": false,
+            "in": "query",
+            "description": "Filter assets by custom group ID",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
               "type": "string"
             }
           },
@@ -19298,6 +19407,12 @@
                 "description": "Inclusion filters",
                 "items": {
                   "properties": {
+                    "groupId": {
+                      "description": "Filter by custom group ID",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                      "type": "string"
+                    },
                     "minCount": {
                       "description": "Minimum count of people from this group",
                       "maximum": 9007199254740991,
@@ -19314,9 +19429,6 @@
                       "type": "array"
                     }
                   },
-                  "required": [
-                    "personIds"
-                  ],
                   "type": "object"
                 },
                 "type": "array"
@@ -21003,6 +21115,12 @@
                 "description": "Inclusion filters",
                 "items": {
                   "properties": {
+                    "groupId": {
+                      "description": "Filter by custom group ID",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                      "type": "string"
+                    },
                     "minCount": {
                       "description": "Minimum count of people from this group",
                       "maximum": 9007199254740991,
@@ -21019,9 +21137,6 @@
                       "type": "array"
                     }
                   },
-                  "required": [
-                    "personIds"
-                  ],
                   "type": "object"
                 },
                 "type": "array"
@@ -22423,6 +22538,12 @@
                 "description": "Inclusion filters",
                 "items": {
                   "properties": {
+                    "groupId": {
+                      "description": "Filter by custom group ID",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                      "type": "string"
+                    },
                     "minCount": {
                       "description": "Minimum count of people from this group",
                       "maximum": 9007199254740991,
@@ -22439,9 +22560,6 @@
                       "type": "array"
                     }
                   },
-                  "required": [
-                    "personIds"
-                  ],
                   "type": "object"
                 },
                 "type": "array"
@@ -22739,6 +22857,12 @@
                 "description": "Inclusion filters",
                 "items": {
                   "properties": {
+                    "groupId": {
+                      "description": "Filter by custom group ID",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                      "type": "string"
+                    },
                     "minCount": {
                       "description": "Minimum count of people from this group",
                       "maximum": 9007199254740991,
@@ -22755,9 +22879,6 @@
                       "type": "array"
                     }
                   },
-                  "required": [
-                    "personIds"
-                  ],
                   "type": "object"
                 },
                 "type": "array"

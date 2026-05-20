@@ -85,7 +85,8 @@ export interface SearchOcrOptions {
 }
 
 export interface SearchPersonQueryGroup {
-  personIds: string[];
+  personIds?: string[];
+  groupId?: string;
   minCount?: number;
 }
 

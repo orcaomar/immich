@@ -23,6 +23,7 @@
     updatePerson,
     getAll as getAllGroups,
     deletePersonGroupsById,
+    getSmartAlbumsUsingGroup,
     type PersonResponseDto,
     type PersonGroupResponseDto
   } from '@immich/sdk';
@@ -92,9 +93,20 @@
   };
 
   const handleDeleteGroup = async (id: string) => {
+    let warningPrompt = 'Are you sure you want to delete this group? This action cannot be undone.';
+    try {
+      const albums = (await getSmartAlbumsUsingGroup({ groupId: id })) as any;
+      if (albums && albums.length > 0) {
+        const albumNames = albums.map((a: any) => a.albumName).join(', ');
+        warningPrompt = `Warning: The following Smart Albums are using this group and will no longer work correctly: [${albumNames}]. Are you sure you want to delete this group? This action cannot be undone.`;
+      }
+    } catch (error) {
+      // Fallback
+    }
+
     const isConfirmed = await modalManager.showDialog({
       title: 'Delete Group',
-      prompt: 'Are you sure you want to delete this group? This action cannot be undone.',
+      prompt: warningPrompt,
       confirmText: 'Delete',
       confirmColor: 'danger',
     });
@@ -486,14 +498,23 @@
       {#if groups.length > 0}
         <div class="grid grid-cols-1 gap-6 p-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           {#each groups as group (group.id)}
-            <div class="relative flex flex-col justify-between rounded-3xl border border-gray-100 bg-white p-5 shadow-sm transition-all hover:translate-y-[-2px] hover:border-primary/30 hover:shadow-md dark:border-gray-800 dark:bg-immich-dark-gray dark:hover:border-immich-dark-primary/30">
-              <button
-                type="button"
-                onclick={() => viewGroupMembers(group)}
-                class="text-left w-full focus:outline-none group/card cursor-pointer"
-              >
+            <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+            <div
+              onclick={() => goto(Route.viewGroup({ id: group.id }))}
+              class="relative flex flex-col justify-between rounded-3xl border border-gray-100 bg-white p-5 shadow-sm transition-all hover:translate-y-[-2px] hover:border-primary/30 hover:shadow-md dark:border-gray-800 dark:bg-immich-dark-gray dark:hover:border-immich-dark-primary/30 cursor-pointer group/card"
+            >
+              <div class="text-left w-full">
                 <h3 class="line-clamp-1 text-lg font-bold text-primary group-hover/card:underline">{group.name}</h3>
-                <p class="text-xs text-gray-400 dark:text-gray-500">{group.personIds.length} members</p>
+                <button
+                  type="button"
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    viewGroupMembers(group);
+                  }}
+                  class="text-xs text-gray-400 dark:text-gray-500 hover:text-immich-primary hover:dark:text-immich-dark-primary hover:underline focus:outline-none"
+                >
+                  {group.personIds.length} members
+                </button>
 
                 <div class="flex items-center -space-x-3 overflow-hidden py-4">
                   {#each group.personIds.slice(0, 5) as personId}
@@ -516,9 +537,13 @@
                     </div>
                   {/if}
                 </div>
-              </button>
+              </div>
 
-              <div class="mt-4 flex gap-2 border-t border-gray-50 pt-3 dark:border-gray-800">
+              <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+              <div
+                onclick={(e) => e.stopPropagation()}
+                class="mt-4 flex gap-2 border-t border-gray-50 pt-3 dark:border-gray-800"
+              >
                 <Button
                   size="small"
                   variant="ghost"

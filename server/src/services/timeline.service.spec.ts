@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { AssetVisibility } from 'src/enum';
 import { TimelineService } from 'src/services/timeline.service';
 import { authStub } from 'test/fixtures/auth.stub';
@@ -39,6 +39,47 @@ describe(TimelineService.name, () => {
       expect(mocks.asset.getTimeBuckets).toHaveBeenCalledWith({
         userIds: [authStub.admin.user.id],
         bbox: { west: -70, south: -30, east: 120, north: 55 },
+      });
+    });
+
+    it('should throw NotFoundException if groupId is provided but group does not exist', async () => {
+      mocks.personGroup.getById.mockResolvedValue(undefined);
+
+      await expect(
+        sut.getTimeBuckets(authStub.admin, { groupId: 'non-existent-group-id' }),
+      ).rejects.toThrow(NotFoundException);
+
+      expect(mocks.personGroup.getById).toHaveBeenCalledWith('non-existent-group-id');
+    });
+
+    it('should throw NotFoundException if groupId is provided but belongs to another user', async () => {
+      mocks.personGroup.getById.mockResolvedValue({
+        id: 'other-group-id',
+        ownerId: 'other-user-id',
+      } as any);
+
+      await expect(
+        sut.getTimeBuckets(authStub.admin, { groupId: 'other-group-id' }),
+      ).rejects.toThrow(NotFoundException);
+
+      expect(mocks.personGroup.getById).toHaveBeenCalledWith('other-group-id');
+    });
+
+    it('should successfully return buckets if groupId is provided and belongs to user', async () => {
+      mocks.personGroup.getById.mockResolvedValue({
+        id: 'my-group-id',
+        ownerId: authStub.admin.user.id,
+      } as any);
+      mocks.asset.getTimeBuckets.mockResolvedValue([{ timeBucket: 'bucket', count: 1 }]);
+
+      await expect(
+        sut.getTimeBuckets(authStub.admin, { groupId: 'my-group-id' }),
+      ).resolves.toEqual(expect.arrayContaining([{ timeBucket: 'bucket', count: 1 }]));
+
+      expect(mocks.personGroup.getById).toHaveBeenCalledWith('my-group-id');
+      expect(mocks.asset.getTimeBuckets).toHaveBeenCalledWith({
+        userIds: [authStub.admin.user.id],
+        groupId: 'my-group-id',
       });
     });
   });
@@ -203,6 +244,46 @@ describe(TimelineService.name, () => {
           userId: authStub.admin.user.id,
         }),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw NotFoundException if groupId is provided but group does not exist', async () => {
+      mocks.personGroup.getById.mockResolvedValue(undefined);
+
+      await expect(
+        sut.getTimeBucket(authStub.admin, {
+          timeBucket: 'bucket',
+          groupId: 'non-existent-group-id',
+        }),
+      ).rejects.toThrow(NotFoundException);
+
+      expect(mocks.personGroup.getById).toHaveBeenCalledWith('non-existent-group-id');
+    });
+
+    it('should successfully return asset time bucket if groupId is provided and belongs to user', async () => {
+      mocks.personGroup.getById.mockResolvedValue({
+        id: 'my-group-id',
+        ownerId: authStub.admin.user.id,
+      } as any);
+      const json = `[{ id: ['asset-id'] }]`;
+      mocks.asset.getTimeBucket.mockResolvedValue({ assets: json });
+
+      await expect(
+        sut.getTimeBucket(authStub.admin, {
+          timeBucket: 'bucket',
+          groupId: 'my-group-id',
+        }),
+      ).resolves.toEqual(json);
+
+      expect(mocks.personGroup.getById).toHaveBeenCalledWith('my-group-id');
+      expect(mocks.asset.getTimeBucket).toHaveBeenCalledWith(
+        'bucket',
+        {
+          timeBucket: 'bucket',
+          groupId: 'my-group-id',
+          userIds: [authStub.admin.user.id],
+        },
+        authStub.admin,
+      );
     });
   });
 });

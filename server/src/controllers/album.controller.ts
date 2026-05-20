@@ -197,4 +197,32 @@ export class AlbumController {
   ): Promise<void> {
     return this.service.removeUser(auth, id, userId);
   }
+
+  @Get('smart/usage/group/:groupId')
+  @Authenticated()
+  @Endpoint({
+    summary: 'Get Smart Albums using a custom group',
+    description: 'Find all Smart Albums that are using the specified custom group.',
+    history: new HistoryBuilder().added('v1'),
+  })
+  getSmartAlbumsUsingGroup(
+    @Auth() auth: AuthDto,
+    @Param('groupId', new ParseMeUUIDPipe({ version: '4' })) groupId: string,
+  ): Promise<Array<{ id: string; albumName: string }>> {
+    return this.service.getSmartAlbumUsageByGroup(auth, groupId);
+  }
+
+  @Get('smart/usage/person/:personId')
+  @Authenticated()
+  @Endpoint({
+    summary: 'Get Smart Albums using a person',
+    description: 'Find all Smart Albums that are using the specified person directly.',
+    history: new HistoryBuilder().added('v1'),
+  })
+  getSmartAlbumsUsingPerson(
+    @Auth() auth: AuthDto,
+    @Param('personId', new ParseMeUUIDPipe({ version: '4' })) personId: string,
+  ): Promise<Array<{ id: string; albumName: string }>> {
+    return this.service.getSmartAlbumUsageByPerson(auth, personId);
+  }
 }

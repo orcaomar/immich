@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { AuthDto } from 'src/dtos/auth.dto';
 import { TimeBucketAssetDto, TimeBucketDto, TimeBucketsResponseDto } from 'src/dtos/time-bucket.dto';
 import { AssetVisibility, Permission } from 'src/enum';
@@ -64,6 +64,13 @@ export class TimelineService extends BaseService {
 
     if (dto.tagId) {
       await this.requireAccess({ auth, permission: Permission.TagRead, ids: [dto.tagId] });
+    }
+
+    if (dto.groupId) {
+      const group = await this.personGroupRepository.getById(dto.groupId);
+      if (!group || group.ownerId !== auth.user.id) {
+        throw new NotFoundException('Person group not found');
+      }
     }
 
     if (dto.withPartners) {

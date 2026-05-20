@@ -1486,5 +1486,31 @@ describe(AlbumService.name, () => {
       expect(mocks.map.getMapMarkersByAssetIds).toHaveBeenCalledWith([assetId]);
     });
   });
+
+  describe('smart album usage', () => {
+    it('should get smart albums using a custom group', async () => {
+      const auth = AuthFactory.create();
+      const groupId = newUuid();
+      mocks.personGroup.getById.mockResolvedValue({ id: groupId, name: 'Group Name', personIds: [] } as any);
+      mocks.album.getSmartAlbumsUsingGroup.mockResolvedValue([{ id: 'album-1', albumName: 'Group Album' }]);
+
+      await expect(sut.getSmartAlbumUsageByGroup(auth, groupId)).resolves.toEqual([
+        { id: 'album-1', albumName: 'Group Album' },
+      ]);
+      expect(mocks.personGroup.getById).toHaveBeenCalledWith(groupId);
+      expect(mocks.album.getSmartAlbumsUsingGroup).toHaveBeenCalledWith(groupId, 'Group Name');
+    });
+
+    it('should get smart albums using a person', async () => {
+      const auth = AuthFactory.create();
+      const personId = newUuid();
+      mocks.album.getSmartAlbumsUsingPerson.mockResolvedValue([{ id: 'album-2', albumName: 'Person Album' }]);
+
+      await expect(sut.getSmartAlbumUsageByPerson(auth, personId)).resolves.toEqual([
+        { id: 'album-2', albumName: 'Person Album' },
+      ]);
+      expect(mocks.album.getSmartAlbumsUsingPerson).toHaveBeenCalledWith(personId);
+    });
+  });
 });
 

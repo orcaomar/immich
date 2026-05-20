@@ -40,6 +40,7 @@
     type MetadataSearchDto,
     searchAssets,
     searchSmart,
+    getById as getPersonGroup,
     type SmartSearchDto,
   } from '@immich/sdk';
   import { ActionButton, CommandPaletteDefaultProvider, Icon, IconButton, LoadingSpinner } from '@immich/ui';
@@ -244,6 +245,17 @@
               ? `Includes ${names.replaceAll(', ', ' OR ')}`
               : `Includes at least ${minCount} of ${names}`;
           chips.push({ type: 'include', label, personIds: group.personIds });
+        } else if (group.groupId) {
+          try {
+            const groupData = await getPersonGroup({ id: group.groupId });
+            const minCount = group.minCount ?? groupData.personIds.length;
+            const label = minCount === groupData.personIds.length
+              ? `Includes ${groupData.name}`
+              : `Includes at least ${minCount} in ${groupData.name}`;
+            chips.push({ type: 'include', label, personIds: groupData.personIds });
+          } catch (error) {
+            chips.push({ type: 'include', label: `Includes Group (Deleted)` });
+          }
         }
       }
     }

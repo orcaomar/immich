@@ -268,6 +268,39 @@ export function hasPeopleGroup<O>(
   ) as any;
 }
 
+export function hasPeopleGroupForGroupId<O>(
+  qb: SelectQueryBuilder<DB, 'asset', O>,
+  groupId: string,
+  minCount: number | undefined,
+  alias: string,
+) {
+  return qb.innerJoin(
+    (eb: any) =>
+      eb
+        .selectFrom('asset_face')
+        .select('assetId')
+        .where('deletedAt', 'is', null)
+        .where('isVisible', 'is', true)
+        .where('personId', 'in', (eb: any) =>
+          eb
+            .selectFrom('person_group')
+            .select(sql`unnest("personIds")`.as('personId'))
+            .where('id', '=', groupId)
+        )
+        .groupBy('assetId')
+        .having((eb: any) => eb.fn.count('personId').distinct(), '>=', (eb: any) =>
+          minCount !== undefined
+            ? sql.lit(minCount)
+            : eb
+                .selectFrom('person_group')
+                .select(sql`cardinality("personIds")`.as('count'))
+                .where('id', '=', groupId)
+        )
+        .as(alias as any),
+    (join: any) => join.onRef(`${alias}.assetId` as any, '=', 'asset.id'),
+  ) as any;
+}
+
 export function inAlbums<O>(qb: SelectQueryBuilder<DB, 'asset', O>, albumIds: string[]) {
   return qb.innerJoin(
     (eb) =>
@@ -410,6 +443,8 @@ export function searchAssetBuilder(kysely: Kysely<DB>, options: AssetSearchBuild
         if (group.personIds && group.personIds.length > 0) {
           const minCount = group.minCount ?? group.personIds.length;
           builder = hasPeopleGroup(builder, group.personIds, minCount, `has_people_group_${i}`);
+        } else if (group.groupId) {
+          builder = hasPeopleGroupForGroupId(builder, group.groupId, group.minCount, `has_people_group_${i}`);
         }
       }
       return builder;

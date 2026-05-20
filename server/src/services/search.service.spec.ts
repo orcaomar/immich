@@ -319,7 +319,7 @@ describe(SearchService.name, () => {
         personQuery: {
           includes: [
             {
-              personIds: ['uuid-alice', 'uuid-bob', 'uuid-charlie'],
+              groupId: 'uuid-group-1',
               minCount: 2,
             },
           ],

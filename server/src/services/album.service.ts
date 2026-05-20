@@ -384,4 +384,16 @@ export class AlbumService extends BaseService {
     }
     return album;
   }
+
+  async getSmartAlbumUsageByGroup(auth: AuthDto, groupId: string): Promise<Array<{ id: string; albumName: string }>> {
+    const group = await this.personGroupRepository.getById(groupId);
+    if (!group) {
+      return [];
+    }
+    return this.albumRepository.getSmartAlbumsUsingGroup(groupId, group.name);
+  }
+
+  async getSmartAlbumUsageByPerson(auth: AuthDto, personId: string): Promise<Array<{ id: string; albumName: string }>> {
+    return this.albumRepository.getSmartAlbumsUsingPerson(personId);
+  }
 }

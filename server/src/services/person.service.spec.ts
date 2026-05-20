@@ -1216,6 +1216,7 @@ describe(PersonService.name, () => {
         oldPersonId: mergePerson.id,
       });
       expect(mocks.personGroup.replacePersonId).toHaveBeenCalledWith(mergePerson.id, person.id);
+      expect(mocks.album.replacePersonIdInSmartCriteria).toHaveBeenCalledWith(mergePerson.id, person.id);
 
       expect(mocks.access.person.checkOwnerAccess).toHaveBeenCalledWith(auth.user.id, new Set([person.id]));
     });
@@ -1242,6 +1243,7 @@ describe(PersonService.name, () => {
         oldPersonId: mergePerson.id,
       });
       expect(mocks.personGroup.replacePersonId).toHaveBeenCalledWith(mergePerson.id, person.id);
+      expect(mocks.album.replacePersonIdInSmartCriteria).toHaveBeenCalledWith(mergePerson.id, person.id);
 
       expect(mocks.person.update).toHaveBeenCalledWith({
         id: person.id,
@@ -1332,6 +1334,7 @@ describe(PersonService.name, () => {
       await expect(sut.delete(auth, person.id)).resolves.toBeUndefined();
 
       expect(mocks.personGroup.removePersonIds).toHaveBeenCalledWith([person.id]);
+      expect(mocks.album.replacePersonIdInSmartCriteria).toHaveBeenCalledWith(person.id, null);
       expect(mocks.person.delete).toHaveBeenCalledWith([person.id]);
     });
   });

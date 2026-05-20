@@ -8,7 +8,8 @@ import { emptyStringToNull, isoDatetimeToDate, stringToBool } from 'src/validati
 import z from 'zod';
 
 const PersonQueryGroupSchema = z.object({
-  personIds: z.array(z.uuidv4()).describe('Filter by person IDs'),
+  personIds: z.array(z.uuidv4()).optional().describe('Filter by person IDs'),
+  groupId: z.string().uuid().optional().describe('Filter by custom group ID'),
   minCount: z.number().int().min(1).optional().describe('Minimum count of people from this group'),
 });
 

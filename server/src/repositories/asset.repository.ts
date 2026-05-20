@@ -35,6 +35,7 @@ import {
   asUuid,
   hasPeople,
   hasPeopleGroup,
+  hasPeopleGroupForGroupId,
   removeUndefinedKeys,
   truncatedDate,
   unnest,
@@ -83,6 +84,7 @@ interface AssetBuilderOptions {
   albumId?: string;
   tagId?: string;
   personId?: string;
+  groupId?: string;
   userIds?: string[];
   withStacked?: boolean;
   exifInfo?: boolean;
@@ -190,6 +192,8 @@ function applySmartCriteria(qb: any, criteria: any, hasExifJoined: boolean, embe
       if (group.personIds && group.personIds.length > 0) {
         const minCount = group.minCount ?? group.personIds.length;
         builder = hasPeopleGroup(builder, group.personIds, minCount, `has_people_group_${i}`);
+      } else if (group.groupId) {
+        builder = hasPeopleGroupForGroupId(builder, group.groupId, group.minCount, `has_people_group_${i}`);
       }
     }
   }
@@ -867,6 +871,7 @@ export class AssetRepository {
             return applySmartCriteria(qb, smartCriteria, false, embedding);
           })
           .$if(!!options.personId, (qb) => hasPeople(qb, [options.personId!]))
+          .$if(!!options.groupId, (qb) => hasPeopleGroupForGroupId(qb, options.groupId!, 1, 'has_people_group_timeline'))
           .$if(!!options.withStacked, (qb) =>
             qb
               .leftJoin('stack', (join) =>
@@ -977,6 +982,7 @@ export class AssetRepository {
             return applySmartCriteria(qb, smartCriteria, true, embedding);
           })
           .$if(!!options.personId, (qb) => hasPeople(qb, [options.personId!]))
+          .$if(!!options.groupId, (qb) => hasPeopleGroupForGroupId(qb, options.groupId!, 1, 'has_people_group_timeline'))
           .$if(!!options.userIds, (qb) => qb.where('asset.ownerId', '=', anyUuid(options.userIds!)))
           .$if(options.isFavorite !== undefined, (qb) => qb.where('asset.isFavorite', '=', options.isFavorite!))
           .$if(!!options.withStacked, (qb) =>

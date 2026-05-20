@@ -1633,10 +1633,12 @@ export type MetadataSearchDto = {
         excludes?: string[];
         /** Inclusion filters */
         includes?: {
+            /** Filter by custom group ID */
+            groupId?: string;
             /** Minimum count of people from this group */
             minCount?: number;
             /** Filter by person IDs */
-            personIds: string[];
+            personIds?: string[];
         }[];
         /** Original untranslated query string */
         originalQuery?: string;
@@ -1760,10 +1762,12 @@ export type RandomSearchDto = {
         excludes?: string[];
         /** Inclusion filters */
         includes?: {
+            /** Filter by custom group ID */
+            groupId?: string;
             /** Minimum count of people from this group */
             minCount?: number;
             /** Filter by person IDs */
-            personIds: string[];
+            personIds?: string[];
         }[];
         /** Original untranslated query string */
         originalQuery?: string;
@@ -1842,10 +1846,12 @@ export type SmartSearchDto = {
         excludes?: string[];
         /** Inclusion filters */
         includes?: {
+            /** Filter by custom group ID */
+            groupId?: string;
             /** Minimum count of people from this group */
             minCount?: number;
             /** Filter by person IDs */
-            personIds: string[];
+            personIds?: string[];
         }[];
         /** Original untranslated query string */
         originalQuery?: string;
@@ -1922,10 +1928,12 @@ export type StatisticsSearchDto = {
         excludes?: string[];
         /** Inclusion filters */
         includes?: {
+            /** Filter by custom group ID */
+            groupId?: string;
             /** Minimum count of people from this group */
             minCount?: number;
             /** Filter by person IDs */
-            personIds: string[];
+            personIds?: string[];
         }[];
         /** Original untranslated query string */
         originalQuery?: string;
@@ -3709,6 +3717,26 @@ export function addAssetsToAlbums({ albumsAddAssetsDto }: {
         method: "PUT",
         body: albumsAddAssetsDto
     })));
+}
+/**
+ * Get Smart Albums using a custom group
+ */
+export function getSmartAlbumsUsingGroup({ groupId }: {
+    groupId: string;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchText(`/albums/smart/usage/group/${encodeURIComponent(groupId)}`, {
+        ...opts
+    }));
+}
+/**
+ * Get Smart Albums using a person
+ */
+export function getSmartAlbumsUsingPerson({ personId }: {
+    personId: string;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchText(`/albums/smart/usage/person/${encodeURIComponent(personId)}`, {
+        ...opts
+    }));
 }
 /**
  * Retrieve album statistics
@@ -5511,7 +5539,9 @@ export function searchLargeAssets({ albumIds, city, country, createdAfter, creat
         /** Inclusion filters */
         includes?: {
             /** Filter by person IDs */
-            personIds: string[];
+            personIds?: string[];
+            /** Filter by custom group ID */
+            groupId?: string;
             /** Minimum count of people from this group */
             minCount?: number;
         }[];
@@ -6448,9 +6478,10 @@ export function tagAssets({ id, bulkIdsDto }: {
 /**
  * Get time bucket
  */
-export function getTimeBucket({ albumId, bbox, isFavorite, isTrashed, key, order, orderBy, personId, slug, tagId, timeBucket, userId, visibility, withCoordinates, withPartners, withStacked }: {
+export function getTimeBucket({ albumId, bbox, groupId, isFavorite, isTrashed, key, order, orderBy, personId, slug, tagId, timeBucket, userId, visibility, withCoordinates, withPartners, withStacked }: {
     albumId?: string;
     bbox?: string;
+    groupId?: string;
     isFavorite?: boolean;
     isTrashed?: boolean;
     key?: string;
@@ -6472,6 +6503,7 @@ export function getTimeBucket({ albumId, bbox, isFavorite, isTrashed, key, order
     }>(`/timeline/bucket${QS.query(QS.explode({
         albumId,
         bbox,
+        groupId,
         isFavorite,
         isTrashed,
         key,
@@ -6493,9 +6525,10 @@ export function getTimeBucket({ albumId, bbox, isFavorite, isTrashed, key, order
 /**
  * Get time buckets
  */
-export function getTimeBuckets({ albumId, bbox, isFavorite, isTrashed, key, order, orderBy, personId, slug, tagId, userId, visibility, withCoordinates, withPartners, withStacked }: {
+export function getTimeBuckets({ albumId, bbox, groupId, isFavorite, isTrashed, key, order, orderBy, personId, slug, tagId, userId, visibility, withCoordinates, withPartners, withStacked }: {
     albumId?: string;
     bbox?: string;
+    groupId?: string;
     isFavorite?: boolean;
     isTrashed?: boolean;
     key?: string;
@@ -6516,6 +6549,7 @@ export function getTimeBuckets({ albumId, bbox, isFavorite, isTrashed, key, orde
     }>(`/timeline/buckets${QS.query(QS.explode({
         albumId,
         bbox,
+        groupId,
         isFavorite,
         isTrashed,
         key,

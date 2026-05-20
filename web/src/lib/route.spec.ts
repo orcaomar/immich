@@ -38,6 +38,18 @@ describe('Route', () => {
     });
   });
 
+  describe(Route.viewGroup.name, () => {
+    it('should return the correct group path', () => {
+      expect(Route.viewGroup({ id: 'group-id' })).toBe('/people/g/group-id');
+    });
+
+    it('should support query parameters', () => {
+      expect(Route.viewGroup({ id: 'group-id' }, { previousRoute: '/people' })).toBe(
+        '/people/g/group-id?previousRoute=%2Fpeople',
+      );
+    });
+  });
+
   describe(Route.systemSettings.name, () => {
     it('should work', () => {
       expect(Route.systemSettings()).toBe('/admin/system-settings');

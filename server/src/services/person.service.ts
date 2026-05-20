@@ -256,6 +256,9 @@ export class PersonService extends BaseService {
   private async removeAllPeople(people: { id: string; thumbnailPath: string }[]) {
     await Promise.all(people.map((person) => this.storageRepository.unlink(person.thumbnailPath)));
     await this.personGroupRepository.removePersonIds(people.map((person) => person.id));
+    for (const person of people) {
+      await this.albumRepository.replacePersonIdInSmartCriteria(person.id, null);
+    }
     await this.personRepository.delete(people.map((person) => person.id));
     this.logger.debug(`Deleted ${people.length} people`);
   }
@@ -606,6 +609,7 @@ export class PersonService extends BaseService {
 
         await this.personRepository.reassignFaces(mergeData);
         await this.personGroupRepository.replacePersonId(mergeId, id);
+        await this.albumRepository.replacePersonIdInSmartCriteria(mergeId, id);
         await this.removeAllPeople([mergePerson]);
 
         this.logger.log(`Merged ${mergeName} into ${primaryName}`);
