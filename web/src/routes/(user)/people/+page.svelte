@@ -33,6 +33,7 @@
   import type { PageData } from './$types';
   import GroupTab from '$lib/elements/GroupTab.svelte';
   import PersonGroupEditModal from '$lib/modals/PersonGroupEditModal.svelte';
+  import ViewGroupMembersModal from '$lib/modals/ViewGroupMembersModal.svelte';
   import ImageThumbnail from '$lib/components/assets/thumbnail/ImageThumbnail.svelte';
   import { getPeopleThumbnailUrl } from '$lib/utils';
 
@@ -109,6 +110,14 @@
     } catch (error) {
       handleError(error, 'Unable to delete group');
     }
+  };
+
+  const viewGroupMembers = (group: PersonGroupResponseDto) => {
+    const members = group.personIds
+      .map((id) => peopleMap.get(id))
+      .filter((person): person is PersonResponseDto => !!person);
+
+    modalManager.show(ViewGroupMembersModal, { groupName: group.name, members });
   };
 
   onMount(() => {
@@ -478,15 +487,19 @@
         <div class="grid grid-cols-1 gap-6 p-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           {#each groups as group (group.id)}
             <div class="relative flex flex-col justify-between rounded-3xl border border-gray-100 bg-white p-5 shadow-sm transition-all hover:translate-y-[-2px] hover:border-primary/30 hover:shadow-md dark:border-gray-800 dark:bg-immich-dark-gray dark:hover:border-immich-dark-primary/30">
-              <div>
-                <h3 class="line-clamp-1 text-lg font-bold text-primary">{group.name}</h3>
+              <button
+                type="button"
+                onclick={() => viewGroupMembers(group)}
+                class="text-left w-full focus:outline-none group/card cursor-pointer"
+              >
+                <h3 class="line-clamp-1 text-lg font-bold text-primary group-hover/card:underline">{group.name}</h3>
                 <p class="text-xs text-gray-400 dark:text-gray-500">{group.personIds.length} members</p>
 
                 <div class="flex items-center -space-x-3 overflow-hidden py-4">
                   {#each group.personIds.slice(0, 5) as personId}
                     {@const person = peopleMap.get(personId)}
                     {#if person}
-                      <div class="inline-block h-10 w-10 rounded-full ring-2 ring-white dark:ring-immich-dark-gray">
+                      <div class="inline-block h-10 w-10 rounded-full ring-2 ring-white dark:ring-immich-dark-gray transition-transform group-hover/card:scale-105">
                         <ImageThumbnail
                           circle
                           shadow
@@ -498,12 +511,12 @@
                     {/if}
                   {/each}
                   {#if group.personIds.length > 5}
-                    <div class="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-xs font-semibold text-gray-500 ring-2 ring-white dark:bg-gray-800 dark:text-gray-400 dark:ring-immich-dark-gray">
+                    <div class="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-xs font-semibold text-gray-500 ring-2 ring-white dark:bg-gray-800 dark:text-gray-400 dark:ring-immich-dark-gray transition-transform group-hover/card:scale-105">
                       +{group.personIds.length - 5}
                     </div>
                   {/if}
                 </div>
-              </div>
+              </button>
 
               <div class="mt-4 flex gap-2 border-t border-gray-50 pt-3 dark:border-gray-800">
                 <Button

@@ -1,23 +1,48 @@
 <script lang="ts">
-  import { Icon } from '@immich/ui';
+  import { Icon, modalManager } from '@immich/ui';
   import { mdiClose, mdiChevronDown, mdiChevronUp } from '@mdi/js';
+  import { getPerson, type PersonResponseDto } from '@immich/sdk';
+  import ViewGroupMembersModal from '$lib/modals/ViewGroupMembersModal.svelte';
   import { t } from 'svelte-i18n';
 
   type Props = {
     type: 'include' | 'exclude';
     label: string;
     originalQuery?: string;
+    personIds?: string[];
     onRemove: () => void;
   };
 
-  const { type, label, originalQuery, onRemove }: Props = $props();
+  const { type, label, originalQuery, personIds = [], onRemove }: Props = $props();
 
   let isExpanded = $state(false);
+  let isLoadingMembers = $state(false);
 
   // If there's an original query, use it as the collapsed label; otherwise use the expanded label
   const displayText = $derived(
     originalQuery && !isExpanded ? originalQuery : label
   );
+
+  const viewMembers = async () => {
+    if (!personIds || personIds.length === 0) {
+      return;
+    }
+    
+    try {
+      isLoadingMembers = true;
+      const members = await Promise.all(
+        personIds.map((id) => getPerson({ id }))
+      );
+      isLoadingMembers = false;
+      
+      modalManager.show(ViewGroupMembersModal, {
+        groupName: originalQuery || 'Group Members',
+        members
+      });
+    } catch (error) {
+      isLoadingMembers = false;
+    }
+  };
 </script>
 
 <div
@@ -35,9 +60,24 @@
     {type === 'include' ? 'AI Filter' : 'AI Exclude'}
   </span>
 
-  <span class="max-w-[min(36rem,55vw)] min-w-0 truncate px-3 py-1.5 text-immich-fg dark:text-immich-dark-fg font-medium">
-    {displayText}
-  </span>
+  {#if personIds.length > 0}
+    <button
+      type="button"
+      onclick={viewMembers}
+      disabled={isLoadingMembers}
+      class="max-w-[min(36rem,55vw)] min-w-0 truncate px-3 py-1.5 text-immich-fg dark:text-immich-dark-fg font-medium hover:text-primary dark:hover:text-immich-dark-primary hover:underline cursor-pointer disabled:opacity-50 text-left outline-none transition-colors"
+      title="Click to view all group members"
+    >
+      {displayText}
+      {#if isLoadingMembers}
+        <span class="text-[10px] text-gray-400 ml-1 font-normal">(loading...)</span>
+      {/if}
+    </button>
+  {:else}
+    <span class="max-w-[min(36rem,55vw)] min-w-0 truncate px-3 py-1.5 text-immich-fg dark:text-immich-dark-fg font-medium">
+      {displayText}
+    </span>
+  {/if}
 
   {#if originalQuery}
     <button

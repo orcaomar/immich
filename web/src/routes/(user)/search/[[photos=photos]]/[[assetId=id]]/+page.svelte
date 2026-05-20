@@ -227,8 +227,8 @@
 
   async function getPersonQueryChips(
     personQuery: SmartSearchDto['personQuery'],
-  ): Promise<Array<{ type: 'include' | 'exclude'; label: string }>> {
-    const chips: Array<{ type: 'include' | 'exclude'; label: string }> = [];
+  ): Promise<Array<{ type: 'include' | 'exclude'; label: string; personIds?: string[] }>> {
+    const chips: Array<{ type: 'include' | 'exclude'; label: string; personIds?: string[] }> = [];
     if (!personQuery) {
       return chips;
     }
@@ -243,14 +243,14 @@
             : minCount === 1
               ? `Includes ${names.replaceAll(', ', ' OR ')}`
               : `Includes at least ${minCount} of ${names}`;
-          chips.push({ type: 'include', label });
+          chips.push({ type: 'include', label, personIds: group.personIds });
         }
       }
     }
 
     if (personQuery.excludes && personQuery.excludes.length > 0) {
       const names = await getPersonName(personQuery.excludes);
-      chips.push({ type: 'exclude', label: `Excludes ${names}` });
+      chips.push({ type: 'exclude', label: `Excludes ${names}`, personIds: personQuery.excludes });
     }
 
     return chips;
@@ -336,6 +336,7 @@
               <PersonQueryChip
                 type={chip.type}
                 label={chip.label}
+                personIds={chip.personIds}
                 originalQuery={chip.type === 'include' ? (value as SmartSearchDto['personQuery'])?.originalQuery : undefined}
                 onRemove={() => removeFilter('personQuery', chip.type)}
               />
