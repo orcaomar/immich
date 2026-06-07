@@ -18,7 +18,7 @@ import { AlbumUserRole, Permission } from 'src/enum';
 import { AlbumAssetCount, AlbumInfoOptions } from 'src/repositories/album.repository';
 import { BaseService } from 'src/services/base.service';
 import { addAssets, removeAssets } from 'src/utils/asset.util';
-import { asDateString } from 'src/utils/date';
+import { asDateTimeString } from 'src/utils/date';
 import { getPreferences } from 'src/utils/preferences';
 
 @Injectable()
@@ -37,15 +37,12 @@ export class AlbumService extends BaseService {
     };
   }
 
-  async getAll(
-    { user: { id: ownerId } }: AuthDto,
-    { assetId, isOwned, isShared }: GetAlbumsDto,
-  ): Promise<AlbumResponseDto[]> {
+  async getAll({ user: { id: ownerId } }: AuthDto, { assetId, ...rest }: GetAlbumsDto): Promise<AlbumResponseDto[]> {
     await this.albumRepository.updateThumbnails();
 
     const albums = assetId
       ? await this.albumRepository.getByAssetId(ownerId, assetId)
-      : await this.albumRepository.getAll(ownerId, { isOwned, isShared });
+      : await this.albumRepository.getAll(ownerId, rest);
 
     if (albums.length === 0) {
       return [];
@@ -67,11 +64,11 @@ export class AlbumService extends BaseService {
       return {
         ...mapAlbum(album),
         sharedLinks: undefined,
-        startDate: asDateString(metadata?.startDate ?? undefined),
-        endDate: asDateString(metadata?.endDate ?? undefined),
+        startDate: asDateTimeString(metadata?.startDate ?? undefined),
+        endDate: asDateTimeString(metadata?.endDate ?? undefined),
         assetCount: metadata?.assetCount ?? 0,
         // lastModifiedAssetTimestamp is only used in mobile app, please remove if not need
-        lastModifiedAssetTimestamp: asDateString(metadata?.lastModifiedAssetTimestamp ?? undefined),
+        lastModifiedAssetTimestamp: asDateTimeString(metadata?.lastModifiedAssetTimestamp ?? undefined),
       };
     });
   }
@@ -92,10 +89,10 @@ export class AlbumService extends BaseService {
 
     return {
       ...mapAlbum(album),
-      startDate: asDateString(albumMetadataForIds?.startDate ?? undefined),
-      endDate: asDateString(albumMetadataForIds?.endDate ?? undefined),
+      startDate: asDateTimeString(albumMetadataForIds?.startDate ?? undefined),
+      endDate: asDateTimeString(albumMetadataForIds?.endDate ?? undefined),
       assetCount: albumMetadataForIds?.assetCount ?? 0,
-      lastModifiedAssetTimestamp: asDateString(albumMetadataForIds?.lastModifiedAssetTimestamp ?? undefined),
+      lastModifiedAssetTimestamp: asDateTimeString(albumMetadataForIds?.lastModifiedAssetTimestamp ?? undefined),
       contributorCounts: isShared ? await this.albumRepository.getContributorCounts(album.id) : undefined,
     };
   }

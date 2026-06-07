@@ -413,7 +413,7 @@
       <GalleryViewer
         assets={searchResultAssets}
         assetInteraction={assetMultiSelectManager}
-        onIntersected={loadNextPage}
+        onEndReached={loadNextPage}
         showArchiveIcon={true}
         {viewport}
         onReload={onSearchQueryUpdate}
@@ -504,8 +504,7 @@
               />
             {/if}
           {/snippet}
-          <div class="absolute bg-light"></div>
-          <div class="w-full flex-1 ps-4">
+          <div class="mx-auto w-full max-w-2xl pe-2">
             <SearchBar grayTheme={false} value={terms?.query ?? ''} searchQuery={terms} />
           </div>
         </ControlAppBar>

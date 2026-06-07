@@ -45,11 +45,11 @@ services:
       target: dev
     command:
       - |
-        pnpm install
+        mise install
         touch /tmp/init-complete
         exec tail -f /dev/null
     volumes:
-      - pnpm_store_server:/buildcache/pnpm-store
+      - build_cache:/buildcache
     restart: 'no'
     healthcheck:
       test: ['CMD', 'test', '-f', '/tmp/init-complete']
@@ -179,9 +179,7 @@ volumes:
   model_cache:
   prometheus_data:
   grafana_data:
-  pnpm_cache:
-  pnpm_store_server:
-  pnpm_store_web:
+  build_cache:
   server_node_modules:
   web_node_modules:
   github_node_modules:
